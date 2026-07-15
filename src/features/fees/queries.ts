@@ -287,3 +287,113 @@ export async function getStudentFeeStatement(
     balance: totalCharged - totalPaid,
   };
 }
+
+export interface PaymentReceipt {
+  id: string;
+  receiptNumber: string;
+  amount: number;
+  method: string;
+  referenceNumber: string | null;
+  paidOn: string;
+  notes: string | null;
+  recordedByName: string | null;
+  student: {
+    id: string;
+    fullName: string;
+    admissionNumber: string;
+  };
+  school: {
+    name: string;
+    address: string | null;
+    phone: string | null;
+  };
+  balanceAfter: number;
+}
+
+export async function getPaymentReceipt(
+  paymentId: string,
+): Promise<PaymentReceipt | null> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: row } = await supabase
+    .from("payments")
+    .select(
+      "id, receipt_number, amount, method, reference_number, paid_on, notes, recorded_by, status, student:students(id, first_name, middle_name, last_name, admission_number), school:schools(name, address, phone)",
+    )
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (!row) {
+    return null;
+  }
+
+  const payment = row as unknown as {
+    id: string;
+    receipt_number: string;
+    amount: number | string;
+    method: string;
+    reference_number: string | null;
+    paid_on: string;
+    notes: string | null;
+    recorded_by: string | null;
+    status: string;
+    student: {
+      id: string;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+      admission_number: string;
+    } | null;
+    school: {
+      name: string;
+      address: string | null;
+      phone: string | null;
+    } | null;
+  };
+
+  if (payment.status !== "completed" || !payment.student || !payment.school) {
+    return null;
+  }
+
+  let recordedByName: string | null = null;
+  if (payment.recorded_by) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", payment.recorded_by)
+      .maybeSingle();
+    recordedByName = profile?.full_name ?? null;
+  }
+
+  // Balance after this payment = all charges − all completed payments up to
+  // and including this one (by created time / paid_on).
+  const statement = await getStudentFeeStatement(payment.student.id);
+
+  return {
+    id: payment.id,
+    receiptNumber: payment.receipt_number,
+    amount: Number(payment.amount),
+    method: payment.method,
+    referenceNumber: payment.reference_number,
+    paidOn: payment.paid_on,
+    notes: payment.notes,
+    recordedByName,
+    student: {
+      id: payment.student.id,
+      fullName: [
+        payment.student.first_name,
+        payment.student.middle_name,
+        payment.student.last_name,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      admissionNumber: payment.student.admission_number,
+    },
+    school: {
+      name: payment.school.name,
+      address: payment.school.address,
+      phone: payment.school.phone,
+    },
+    balanceAfter: statement.balance,
+  };
+}

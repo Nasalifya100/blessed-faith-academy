@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
   generateClassChargesSchema,
   generateStudentChargesSchema,
+  recordPaymentSchema,
   updateScheduleAmountSchema,
 } from "./schemas";
 
@@ -138,4 +139,48 @@ export async function generateClassChargesAction(
     error: null,
     createdCount: typeof data === "number" ? data : Number(data) || 0,
   };
+}
+
+export interface RecordPaymentResult {
+  error: string | null;
+  paymentId: string | null;
+}
+
+export async function recordPaymentAction(
+  input: unknown,
+): Promise<RecordPaymentResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error, paymentId: null };
+  }
+
+  const parsed = recordPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Please check the form.",
+      paymentId: null,
+    };
+  }
+
+  const data = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { data: paymentId, error } = await supabase.rpc("record_payment", {
+    p_student_id: data.studentId,
+    p_amount: data.amount,
+    p_method: data.method,
+    p_reference_number: data.reference_number?.trim() ?? "",
+    p_paid_on: data.paid_on,
+    p_notes: data.notes?.trim() ?? "",
+  });
+
+  if (error) {
+    return { error: error.message, paymentId: null };
+  }
+
+  const id = typeof paymentId === "string" ? paymentId : null;
+  revalidatePath(`/dashboard/students/${data.studentId}`);
+  if (id) {
+    revalidatePath(`/dashboard/payments/${id}/receipt`);
+  }
+  return { error: null, paymentId: id };
 }

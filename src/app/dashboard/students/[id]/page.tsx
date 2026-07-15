@@ -11,6 +11,7 @@ import {
 import { StudentStatusBadge } from "@/features/students/components/status-badge";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
+import { RecordPaymentForm } from "@/features/fees/components/record-payment-form";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -235,11 +236,17 @@ export default async function StudentProfilePage({
         </CardHeader>
         <CardContent className="space-y-4">
           {canManageFees && student.status === "enrolled" ? (
-            <GenerateStudentChargesButton
-              studentId={student.id}
-              termId={statement.currentTermId}
-              termName={statement.currentTermName}
-            />
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <GenerateStudentChargesButton
+                studentId={student.id}
+                termId={statement.currentTermId}
+                termName={statement.currentTermName}
+              />
+              <RecordPaymentForm
+                studentId={student.id}
+                currentBalance={statement.balance}
+              />
+            </div>
           ) : null}
           <FeeStatement statement={statement} />
         </CardContent>

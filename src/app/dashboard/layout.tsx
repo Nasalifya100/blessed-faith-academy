@@ -44,7 +44,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3">
+      <header className="flex items-center justify-between border-b px-6 py-3 print:hidden">
         <div>
           <p className="font-semibold">Blessed Faith Academy</p>
           <p className="text-xs text-muted-foreground">

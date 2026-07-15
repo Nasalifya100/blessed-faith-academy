@@ -93,8 +93,7 @@ export function FeeStatement({ statement }: FeeStatementProps) {
         <h3 className="text-sm font-semibold">Payments</h3>
         {statement.payments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No payments recorded yet. Recording payments comes in the next
-            step.
+            No payments recorded yet.
           </p>
         ) : (
           <div className="rounded-lg border">
@@ -111,7 +110,12 @@ export function FeeStatement({ statement }: FeeStatementProps) {
                 {statement.payments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-mono text-xs">
-                      {payment.receiptNumber}
+                      <a
+                        href={`/dashboard/payments/${payment.id}/receipt`}
+                        className="hover:underline"
+                      >
+                        {payment.receiptNumber}
+                      </a>
                     </TableCell>
                     <TableCell>
                       {METHOD_LABELS[payment.method] ?? payment.method}

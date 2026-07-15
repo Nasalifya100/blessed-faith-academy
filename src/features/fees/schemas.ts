@@ -48,3 +48,27 @@ export const generateClassChargesSchema = z.object({
   classId: z.string().uuid(),
   termId: z.string().uuid().optional(),
 });
+
+export const PAYMENT_METHODS = ["mobile_money", "bank_transfer"] as const;
+
+export const PAYMENT_METHOD_LABELS: Record<
+  (typeof PAYMENT_METHODS)[number],
+  string
+> = {
+  mobile_money: "Mobile money",
+  bank_transfer: "Bank transfer",
+};
+
+export const recordPaymentSchema = z.object({
+  studentId: z.string().uuid(),
+  amount: z.number().positive("Amount must be greater than zero"),
+  method: z.enum(PAYMENT_METHODS),
+  reference_number: z.string().optional().or(z.literal("")),
+  paid_on: z
+    .string()
+    .min(1, "Payment date is required")
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
+  notes: z.string().optional().or(z.literal("")),
+});
+
+export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
