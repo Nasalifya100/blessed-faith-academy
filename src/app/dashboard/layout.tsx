@@ -49,6 +49,9 @@ export default async function DashboardLayout({
           <Link href="/dashboard" className="text-sm hover:underline">
             Dashboard
           </Link>
+          <Link href="/dashboard/students" className="text-sm hover:underline">
+            Students
+          </Link>
           {isAdmin ? (
             <Link href="/dashboard/staff" className="text-sm hover:underline">
               Staff
