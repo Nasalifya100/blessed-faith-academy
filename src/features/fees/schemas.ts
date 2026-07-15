@@ -63,6 +63,7 @@ export const recordPaymentSchema = z.object({
   studentId: z.string().uuid(),
   amount: z.number().positive("Amount must be greater than zero"),
   method: z.enum(PAYMENT_METHODS),
+  idempotencyKey: z.string().uuid("A payment request id is required"),
   reference_number: z.string().optional().or(z.literal("")),
   paid_on: z
     .string()
@@ -72,6 +73,17 @@ export const recordPaymentSchema = z.object({
 });
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+
+export const voidPaymentSchema = z.object({
+  paymentId: z.string().uuid(),
+  studentId: z.string().uuid(),
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Enter a reversal reason (at least 3 characters)"),
+});
+
+export type VoidPaymentInput = z.infer<typeof voidPaymentSchema>;
 
 export const optInOptionalFeesSchema = z.object({
   studentId: z.string().uuid(),

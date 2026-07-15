@@ -68,6 +68,10 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260715240200_fix_list_classes_for_attendance.sql` | Fix ambiguous `id` in attendance RPC |
 | `20260715250000_discipline_and_rules.sql` | School rules + discipline incidents |
 | `20260715250100_seed_school_rules_if_empty.sql` | Seed default rules when a school has none |
+| `20260716010000_payment_immutability_and_void.sql` | Payment immutability + `void_payment` |
+| `20260716010100_payment_idempotency.sql` | Payment idempotency key + `record_payment` |
+| `20260716010200_charge_immutability_and_cancel.sql` | Charge immutability + unpaid cancel guard |
+| `20260716010300_charge_unique_indexes.sql` | Unique charge indexes + meal exclusivity |
 
 ### After a failed or partial apply
 

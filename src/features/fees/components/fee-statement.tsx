@@ -7,6 +7,7 @@ import Link from "next/link";
 import { cancelOptionalChargeAction } from "@/features/fees/actions";
 import type { StudentFeeStatement } from "@/features/fees/queries";
 import { FEE_CATEGORY_LABELS } from "@/features/fees/schemas";
+import { ReversePaymentButton } from "@/features/fees/components/reverse-payment-button";
 import { formatKwacha } from "@/lib/money";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -144,6 +145,7 @@ export function FeeStatement({
                   const canCancel =
                     canManageFees &&
                     charge.isOptional &&
+                    charge.status === "outstanding" &&
                     (charge.category === "meal" ||
                       charge.category === "uniform");
                   return (
@@ -197,8 +199,9 @@ export function FeeStatement({
         {canManageFees &&
         (mealCharges.length > 0 || uniformCharges.length > 0) ? (
           <p className="text-xs text-muted-foreground">
-            Use Remove on a meal or uniform line to take it off the statement
-            (e.g. to switch meal plan).
+            Remove is only available for outstanding unpaid meal or uniform
+            lines. If payments already cover the statement, reverse a payment
+            first.
           </p>
         ) : null}
       </div>
@@ -207,7 +210,7 @@ export function FeeStatement({
         <h3 className="text-sm font-semibold">Payments</h3>
         {statement.payments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No payments recorded yet.
+            No completed payments recorded yet.
           </p>
         ) : (
           <div className="rounded-lg border">
@@ -218,6 +221,7 @@ export function FeeStatement({
                   <TableHead>Method</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  {canManageFees ? <TableHead className="w-40" /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -238,6 +242,15 @@ export function FeeStatement({
                     <TableCell className="text-right font-medium">
                       {formatKwacha(payment.amount)}
                     </TableCell>
+                    {canManageFees ? (
+                      <TableCell className="text-right align-top">
+                        <ReversePaymentButton
+                          paymentId={payment.id}
+                          studentId={studentId}
+                          receiptNumber={payment.receiptNumber}
+                        />
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -245,6 +258,49 @@ export function FeeStatement({
           </div>
         )}
       </div>
+
+      {statement.voidedPayments.length > 0 ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Reversed payments</h3>
+          <p className="text-xs text-muted-foreground">
+            These receipts remain on file and do not count toward the balance.
+          </p>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Receipt</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Reason</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statement.voidedPayments.map((payment) => (
+                  <TableRow key={payment.id} className="text-muted-foreground">
+                    <TableCell className="font-mono text-xs">
+                      <Link
+                        href={`/dashboard/payments/${payment.id}/receipt`}
+                        className="hover:underline"
+                      >
+                        {payment.receiptNumber}
+                      </Link>{" "}
+                      <Badge variant="outline">Voided</Badge>
+                    </TableCell>
+                    <TableCell>{payment.paidOn}</TableCell>
+                    <TableCell className="max-w-xs truncate text-xs">
+                      {payment.voidReason ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-medium line-through">
+                      {formatKwacha(payment.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

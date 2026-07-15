@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -32,6 +32,23 @@ export function RecordPaymentForm({
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // Stable per form open-session so retries / double-submit reuse the same key
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    crypto.randomUUID(),
+  );
+
+  const defaultValues = useMemo(
+    () => ({
+      studentId,
+      amount: undefined as unknown as number,
+      method: "mobile_money" as const,
+      idempotencyKey,
+      reference_number: "",
+      paid_on: today(),
+      notes: "",
+    }),
+    [studentId, idempotencyKey],
+  );
 
   const {
     register,
@@ -40,34 +57,36 @@ export function RecordPaymentForm({
     formState: { errors, isSubmitting },
   } = useForm<RecordPaymentInput>({
     resolver: zodResolver(recordPaymentSchema),
-    defaultValues: {
+    defaultValues,
+  });
+
+  function openForm() {
+    const key = crypto.randomUUID();
+    setIdempotencyKey(key);
+    reset({
       studentId,
       amount: undefined,
       method: "mobile_money",
+      idempotencyKey: key,
       reference_number: "",
       paid_on: today(),
       notes: "",
-    },
-  });
+    });
+    setServerError(null);
+    setOpen(true);
+  }
 
   async function onSubmit(values: RecordPaymentInput) {
     setServerError(null);
     const result = await recordPaymentAction({
       ...values,
       amount: Number(values.amount),
+      idempotencyKey: values.idempotencyKey || idempotencyKey,
     });
     if (result.error || !result.paymentId) {
       setServerError(result.error ?? "Could not record payment.");
       return;
     }
-    reset({
-      studentId,
-      amount: undefined,
-      method: "mobile_money",
-      reference_number: "",
-      paid_on: today(),
-      notes: "",
-    });
     setOpen(false);
     router.push(`/dashboard/payments/${result.paymentId}/receipt`);
     router.refresh();
@@ -76,7 +95,7 @@ export function RecordPaymentForm({
   if (!open) {
     return (
       <div className="space-y-1">
-        <Button type="button" onClick={() => setOpen(true)}>
+        <Button type="button" onClick={openForm}>
           Record payment
         </Button>
         <p className="text-xs text-muted-foreground">
@@ -105,7 +124,7 @@ export function RecordPaymentForm({
       </div>
       <p className="text-sm text-muted-foreground">
         Current balance: {formatKwacha(currentBalance)}. Partial payments are
-        allowed.
+        allowed. Mobile money and bank transfer only.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -162,6 +181,7 @@ export function RecordPaymentForm({
       </div>
 
       <input type="hidden" {...register("studentId")} />
+      <input type="hidden" {...register("idempotencyKey")} />
 
       {serverError ? (
         <p className="text-sm text-destructive" role="alert">

@@ -177,6 +177,8 @@ export interface StatementPayment {
   receiptNumber: string;
   paidOn: string;
   status: string;
+  voidReason: string | null;
+  voidedAt: string | null;
 }
 
 export interface StudentFeeStatement {
@@ -184,7 +186,10 @@ export interface StudentFeeStatement {
   currentTermName: string | null;
   currentTermId: string | null;
   charges: StatementCharge[];
+  /** Completed payments only — used for totals. */
   payments: StatementPayment[];
+  /** Voided/reversed payments (history; excluded from totals). */
+  voidedPayments: StatementPayment[];
   totalCharged: number;
   totalPaid: number;
   balance: number;
@@ -256,12 +261,14 @@ export async function getStudentFeeStatement(
 
   const { data: paymentRows } = await supabase
     .from("payments")
-    .select("id, amount, method, receipt_number, paid_on, status")
+    .select(
+      "id, amount, method, receipt_number, paid_on, status, void_reason, voided_at",
+    )
     .eq("student_id", studentId)
-    .eq("status", "completed")
+    .in("status", ["completed", "voided"])
     .order("paid_on", { ascending: true });
 
-  const payments: StatementPayment[] = (
+  const mappedPayments: StatementPayment[] = (
     (paymentRows as {
       id: string;
       amount: number | string;
@@ -269,6 +276,8 @@ export async function getStudentFeeStatement(
       receipt_number: string;
       paid_on: string;
       status: string;
+      void_reason: string | null;
+      voided_at: string | null;
     }[] | null) ?? []
   ).map((row) => ({
     id: row.id,
@@ -277,7 +286,12 @@ export async function getStudentFeeStatement(
     receiptNumber: row.receipt_number,
     paidOn: row.paid_on,
     status: row.status,
+    voidReason: row.void_reason,
+    voidedAt: row.voided_at,
   }));
+
+  const payments = mappedPayments.filter((p) => p.status === "completed");
+  const voidedPayments = mappedPayments.filter((p) => p.status === "voided");
 
   const totalCharged = charges
     .filter((charge) => charge.status !== "waived")
@@ -290,6 +304,7 @@ export async function getStudentFeeStatement(
     currentTermId,
     charges,
     payments,
+    voidedPayments,
     totalCharged,
     totalPaid,
     balance: totalCharged - totalPaid,
@@ -614,6 +629,10 @@ export interface PaymentReceipt {
   referenceNumber: string | null;
   paidOn: string;
   notes: string | null;
+  status: string;
+  voidReason: string | null;
+  voidedAt: string | null;
+  voidedByName: string | null;
   recordedByName: string | null;
   student: {
     id: string;
@@ -625,6 +644,7 @@ export interface PaymentReceipt {
     address: string | null;
     phone: string | null;
   };
+  /** Current student balance (completed payments only). */
   balanceAfter: number;
 }
 
@@ -636,7 +656,7 @@ export async function getPaymentReceipt(
   const { data: row } = await supabase
     .from("payments")
     .select(
-      "id, receipt_number, amount, method, reference_number, paid_on, notes, recorded_by, status, student:students(id, first_name, middle_name, last_name, admission_number), school:schools(name, address, phone)",
+      "id, receipt_number, amount, method, reference_number, paid_on, notes, recorded_by, status, void_reason, voided_at, voided_by, student:students(id, first_name, middle_name, last_name, admission_number), school:schools(name, address, phone)",
     )
     .eq("id", paymentId)
     .maybeSingle();
@@ -655,6 +675,9 @@ export async function getPaymentReceipt(
     notes: string | null;
     recorded_by: string | null;
     status: string;
+    void_reason: string | null;
+    voided_at: string | null;
+    voided_by: string | null;
     student: {
       id: string;
       first_name: string;
@@ -669,7 +692,11 @@ export async function getPaymentReceipt(
     } | null;
   };
 
-  if (payment.status !== "completed" || !payment.student || !payment.school) {
+  if (
+    (payment.status !== "completed" && payment.status !== "voided") ||
+    !payment.student ||
+    !payment.school
+  ) {
     return null;
   }
 
@@ -683,8 +710,16 @@ export async function getPaymentReceipt(
     recordedByName = profile?.full_name ?? null;
   }
 
-  // Balance after this payment = all charges − all completed payments up to
-  // and including this one (by created time / paid_on).
+  let voidedByName: string | null = null;
+  if (payment.voided_by) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", payment.voided_by)
+      .maybeSingle();
+    voidedByName = profile?.full_name ?? null;
+  }
+
   const statement = await getStudentFeeStatement(payment.student.id);
 
   return {
@@ -695,6 +730,10 @@ export async function getPaymentReceipt(
     referenceNumber: payment.reference_number,
     paidOn: payment.paid_on,
     notes: payment.notes,
+    status: payment.status,
+    voidReason: payment.void_reason,
+    voidedAt: payment.voided_at,
+    voidedByName,
     recordedByName,
     student: {
       id: payment.student.id,

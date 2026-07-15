@@ -12,6 +12,7 @@ import {
   recordPaymentSchema,
   setRequirementReceivedSchema,
   updateScheduleAmountSchema,
+  voidPaymentSchema,
 } from "./schemas";
 
 
@@ -201,6 +202,7 @@ export async function recordPaymentAction(
     p_student_id: data.studentId,
     p_amount: data.amount,
     p_method: data.method,
+    p_idempotency_key: data.idempotencyKey,
     p_reference_number: data.reference_number?.trim() ?? "",
     p_paid_on: data.paid_on,
     p_notes: data.notes?.trim() ?? "",
@@ -212,10 +214,45 @@ export async function recordPaymentAction(
 
   const id = typeof paymentId === "string" ? paymentId : null;
   revalidatePath(`/dashboard/students/${data.studentId}`);
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/reports/fee-balances");
   if (id) {
     revalidatePath(`/dashboard/payments/${id}/receipt`);
   }
   return { error: null, paymentId: id };
+}
+
+export async function voidPaymentAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error };
+  }
+
+  const parsed = voidPaymentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Please check the form.",
+    };
+  }
+
+  const data = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("void_payment", {
+    p_payment_id: data.paymentId,
+    p_reason: data.reason.trim(),
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/dashboard/students/${data.studentId}`);
+  revalidatePath(`/dashboard/payments/${data.paymentId}/receipt`);
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/reports/fee-balances");
+  return { error: null };
 }
 
 export interface OptInOptionalFeesResult {
