@@ -81,5 +81,8 @@ export const approveApplicationSchema = z.object({
 
 export const rejectApplicationSchema = z.object({
   applicationId: z.string().uuid(),
-  notes: z.string().optional().or(z.literal("")),
+  notes: z
+    .string()
+    .trim()
+    .min(3, "Enter a rejection reason (at least 3 characters)"),
 });

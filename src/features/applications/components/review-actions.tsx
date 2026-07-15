@@ -94,7 +94,7 @@ export function ReviewActions({
 
       {showReject ? (
         <div className="space-y-2 rounded-lg border p-4">
-          <Label htmlFor="reject_notes">Reason (optional)</Label>
+          <Label htmlFor="reject_notes">Reason (required)</Label>
           <textarea
             id="reject_notes"
             value={notes}
@@ -105,7 +105,7 @@ export function ReviewActions({
           <Button
             variant="destructive"
             onClick={reject}
-            disabled={isPending}
+            disabled={isPending || notes.trim().length < 3}
           >
             {isPending ? "Working..." : "Confirm rejection"}
           </Button>
