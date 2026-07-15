@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { fromNgwee, subKwacha, toNgwee } from "@/lib/money";
 
 export interface FeeScheduleRow {
   id: string;
@@ -93,7 +94,7 @@ export async function getFeesSetupData(): Promise<FeesSetupData> {
       const list = schedulesByItem.get(row.fee_item_id) ?? [];
       list.push({
         id: row.id,
-        amount: Number(row.amount),
+        amount: fromNgwee(toNgwee(row.amount)),
         currency: row.currency,
         gradeLevelId: row.grade_level_id,
         gradeLevelName: row.grade_level?.name ?? null,
@@ -252,7 +253,7 @@ export async function getStudentFeeStatement(
       feeItemName: row.fee_item?.name ?? "-",
       category: row.fee_item?.category ?? "other",
       isOptional: row.fee_item?.is_optional ?? false,
-      amount: Number(row.amount),
+      amount: fromNgwee(toNgwee(row.amount)),
       status: row.status,
       termName: row.term?.name ?? null,
       createdAt: row.created_at,
@@ -281,7 +282,7 @@ export async function getStudentFeeStatement(
     }[] | null) ?? []
   ).map((row) => ({
     id: row.id,
-    amount: Number(row.amount),
+    amount: fromNgwee(toNgwee(row.amount)),
     method: row.method,
     receiptNumber: row.receipt_number,
     paidOn: row.paid_on,
@@ -293,10 +294,15 @@ export async function getStudentFeeStatement(
   const payments = mappedPayments.filter((p) => p.status === "completed");
   const voidedPayments = mappedPayments.filter((p) => p.status === "voided");
 
-  const totalCharged = charges
+  const totalChargedNgwee = charges
     .filter((charge) => charge.status !== "waived")
-    .reduce((sum, charge) => sum + charge.amount, 0);
-  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    .reduce((sum, charge) => sum + toNgwee(charge.amount), 0);
+  const totalPaidNgwee = payments.reduce(
+    (sum, payment) => sum + toNgwee(payment.amount),
+    0,
+  );
+  const totalCharged = fromNgwee(totalChargedNgwee);
+  const totalPaid = fromNgwee(totalPaidNgwee);
 
   return {
     academicYearName: year?.name ?? null,
@@ -307,7 +313,7 @@ export async function getStudentFeeStatement(
     voidedPayments,
     totalCharged,
     totalPaid,
-    balance: totalCharged - totalPaid,
+    balance: subKwacha(totalCharged, totalPaid),
   };
 }
 
@@ -396,7 +402,7 @@ export async function getOptionalFeeOptions(
     }[] | null) ?? []) {
       // Prefer school-wide (null grade) for optional items; first wins
       if (!amountByItem.has(row.fee_item_id) || row.grade_level_id === null) {
-        amountByItem.set(row.fee_item_id, Number(row.amount));
+        amountByItem.set(row.fee_item_id, fromNgwee(toNgwee(row.amount)));
       }
     }
   }
@@ -725,7 +731,7 @@ export async function getPaymentReceipt(
   return {
     id: payment.id,
     receiptNumber: payment.receipt_number,
-    amount: Number(payment.amount),
+    amount: fromNgwee(toNgwee(payment.amount)),
     method: payment.method,
     referenceNumber: payment.reference_number,
     paidOn: payment.paid_on,

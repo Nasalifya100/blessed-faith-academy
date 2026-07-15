@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
@@ -23,7 +24,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import { canManageStudents } from "@/features/auth/permissions";
+import {
+  canBrowseStudents,
+  canManageStudents,
+} from "@/features/auth/permissions";
 
 function firstValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
@@ -44,6 +48,9 @@ export default async function StudentsPage({
 
   const current = await getCurrentUser();
   const role = current?.profile?.role;
+  if (!canBrowseStudents(role)) {
+    redirect("/dashboard");
+  }
   const canManage = canManageStudents(role);
 
   const [{ classes }, students] = await Promise.all([

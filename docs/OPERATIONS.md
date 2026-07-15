@@ -80,6 +80,8 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716110100_transfer_student_class.sql` | Mid-year class transfer + one active enrolment per year |
 | `20260716120000_config_integrity_constraints.sql` | Admission uniqueness, one current year/term, unique fee schedules |
 | `20260716120100_attendance_audit_and_soft_delete.sql` | Attendance correction audit; revoke hard DELETE on attendance/rules/incidents |
+| `20260716130000_overpayment_and_school_scoped_select.sql` | Cap payments at balance; school-scope config SELECT |
+| `20260716130100_reuse_guardians.sql` | Match/link guardians by NRC or phone on enrol/apply |
 
 ### Auth / signup (required)
 
@@ -172,6 +174,10 @@ Nav gating (approximate):
 - **Reports / Rules:** most staff roles (see dashboard layout)
 
 Teachers take attendance only for **homeroom** classes or **active cover** assignments.
+
+**Overpayment policy:** Payments cannot exceed the student’s outstanding balance (completed payments vs non-cancelled/waived charges). Credit balances are not created via the payment form/RPC.
+
+**Students directory:** Visible to administrator, headteacher, secretary, and bursar. Teachers open individual profiles via Discipline (or direct link) but do not see the full directory in the nav.
 
 ---
 

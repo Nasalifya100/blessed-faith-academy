@@ -47,8 +47,9 @@ export function RecordPaymentForm({
       reference_number: "",
       paid_on: today(),
       notes: "",
+      maxAmount: Math.max(0, currentBalance),
     }),
-    [studentId, idempotencyKey],
+    [studentId, idempotencyKey, currentBalance],
   );
 
   const {
@@ -72,6 +73,7 @@ export function RecordPaymentForm({
       reference_number: "",
       paid_on: today(),
       notes: "",
+      maxAmount: Math.max(0, currentBalance),
     });
     setServerError(null);
     setOpen(true);
@@ -83,6 +85,7 @@ export function RecordPaymentForm({
       ...values,
       amount: Number(values.amount),
       idempotencyKey: values.idempotencyKey || idempotencyKey,
+      maxAmount: Math.max(0, currentBalance),
     });
     if (result.error || !result.paymentId) {
       setServerError(result.error ?? "Could not record payment.");
@@ -96,11 +99,16 @@ export function RecordPaymentForm({
   if (!open) {
     return (
       <div className="space-y-1">
-        <Button type="button" onClick={openForm}>
+        <Button
+          type="button"
+          onClick={openForm}
+          disabled={currentBalance <= 0}
+        >
           Record payment
         </Button>
         <p className="text-xs text-muted-foreground">
           Current balance: {formatKwacha(currentBalance)}
+          {currentBalance <= 0 ? " — nothing outstanding." : null}
         </p>
       </div>
     );
@@ -124,8 +132,8 @@ export function RecordPaymentForm({
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Current balance: {formatKwacha(currentBalance)}. Partial payments are
-        allowed. Mobile money and bank transfer only.
+        Current balance: {formatKwacha(currentBalance)}. Payments cannot exceed
+        the balance. Mobile money and bank transfer only.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -135,6 +143,7 @@ export function RecordPaymentForm({
             id="amount"
             type="number"
             min={0.01}
+            max={currentBalance > 0 ? currentBalance : undefined}
             step="0.01"
             aria-invalid={Boolean(errors.amount)}
             {...register("amount", { valueAsNumber: true })}

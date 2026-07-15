@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
   canManageStudents,
   canViewStudentMedical,
+  canViewStudentProfile,
 } from "@/features/auth/permissions";
 import { getStudentProfile, getCurrentYearClasses } from "@/features/students/queries";
 import {
@@ -121,6 +122,9 @@ export default async function StudentProfilePage({
   }
 
   const role = current?.profile?.role;
+  if (!canViewStudentProfile(role)) {
+    redirect("/dashboard");
+  }
   const canManageFees = Boolean(
     role && FEE_MANAGER_ROLES.includes(role),
   );

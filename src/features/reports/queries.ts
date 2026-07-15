@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentYearClasses } from "@/features/students/queries";
+import { fromNgwee, subKwacha, toNgwee } from "@/lib/money";
 
 function fullName(parts: {
   first_name: string;
@@ -121,7 +122,7 @@ export async function getFeeBalancesReport(options?: {
     if (row.status === "waived") continue;
     chargedByStudent.set(
       row.student_id,
-      (chargedByStudent.get(row.student_id) ?? 0) + Number(row.amount),
+      (chargedByStudent.get(row.student_id) ?? 0) + toNgwee(row.amount),
     );
   }
 
@@ -138,13 +139,13 @@ export async function getFeeBalancesReport(options?: {
   }[] | null) ?? []) {
     paidByStudent.set(
       row.student_id,
-      (paidByStudent.get(row.student_id) ?? 0) + Number(row.amount),
+      (paidByStudent.get(row.student_id) ?? 0) + toNgwee(row.amount),
     );
   }
 
   let rows: FeeBalanceRow[] = students.map((student) => {
-    const totalCharged = chargedByStudent.get(student.id) ?? 0;
-    const totalPaid = paidByStudent.get(student.id) ?? 0;
+    const totalCharged = fromNgwee(chargedByStudent.get(student.id) ?? 0);
+    const totalPaid = fromNgwee(paidByStudent.get(student.id) ?? 0);
     return {
       studentId: student.id,
       admissionNumber: student.admission_number,
@@ -152,21 +153,25 @@ export async function getFeeBalancesReport(options?: {
       className: classByStudent.get(student.id) ?? null,
       totalCharged,
       totalPaid,
-      balance: totalCharged - totalPaid,
+      balance: subKwacha(totalCharged, totalPaid),
     };
   });
 
   if (outstandingOnly) {
-    rows = rows.filter((row) => row.balance > 0.005);
+    rows = rows.filter((row) => toNgwee(row.balance) > 0);
   }
 
-  rows.sort((a, b) => b.balance - a.balance);
+  rows.sort((a, b) => toNgwee(b.balance) - toNgwee(a.balance));
 
   const totals = {
-    charged: rows.reduce((sum, row) => sum + row.totalCharged, 0),
-    paid: rows.reduce((sum, row) => sum + row.totalPaid, 0),
-    balance: rows.reduce((sum, row) => sum + row.balance, 0),
-    studentsWithBalance: rows.filter((row) => row.balance > 0.005).length,
+    charged: fromNgwee(
+      rows.reduce((sum, row) => sum + toNgwee(row.totalCharged), 0),
+    ),
+    paid: fromNgwee(rows.reduce((sum, row) => sum + toNgwee(row.totalPaid), 0)),
+    balance: fromNgwee(
+      rows.reduce((sum, row) => sum + toNgwee(row.balance), 0),
+    ),
+    studentsWithBalance: rows.filter((row) => toNgwee(row.balance) > 0).length,
   };
 
   return {

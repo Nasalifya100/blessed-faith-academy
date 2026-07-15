@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
-import { canManageApplications } from "@/features/auth/permissions";
+import {
+  canBrowseStudents,
+  canManageApplications,
+} from "@/features/auth/permissions";
 import { ROLE_LABELS } from "@/features/auth/types";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 
@@ -52,6 +55,7 @@ export default async function DashboardLayout({
     ? ROLE_LABELS[current.profile.role]
     : "No role assigned";
   const isAdmin = current.profile?.role === "administrator";
+  const canSeeStudents = canBrowseStudents(current.profile?.role);
   const canSeeApplications = canManageApplications(current.profile?.role);
   const canSeeFees = Boolean(
     current.profile?.role &&
@@ -105,9 +109,11 @@ export default async function DashboardLayout({
           <Link href="/dashboard" className="text-sm hover:underline">
             Dashboard
           </Link>
-          <Link href="/dashboard/students" className="text-sm hover:underline">
-            Students
-          </Link>
+          {canSeeStudents ? (
+            <Link href="/dashboard/students" className="text-sm hover:underline">
+              Students
+            </Link>
+          ) : null}
           {canSeeApplications ? (
             <Link
               href="/dashboard/applications"

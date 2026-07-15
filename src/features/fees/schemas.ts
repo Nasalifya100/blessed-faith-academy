@@ -59,18 +59,33 @@ export const PAYMENT_METHOD_LABELS: Record<
   bank_transfer: "Bank transfer",
 };
 
-export const recordPaymentSchema = z.object({
-  studentId: z.string().uuid(),
-  amount: z.number().positive("Amount must be greater than zero"),
-  method: z.enum(PAYMENT_METHODS),
-  idempotencyKey: z.string().uuid("A payment request id is required"),
-  reference_number: z.string().optional().or(z.literal("")),
-  paid_on: z
-    .string()
-    .min(1, "Payment date is required")
-    .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
-  notes: z.string().optional().or(z.literal("")),
-});
+export const recordPaymentSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    amount: z.number().positive("Amount must be greater than zero"),
+    method: z.enum(PAYMENT_METHODS),
+    idempotencyKey: z.string().uuid("A payment request id is required"),
+    reference_number: z.string().optional().or(z.literal("")),
+    paid_on: z
+      .string()
+      .min(1, "Payment date is required")
+      .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
+    notes: z.string().optional().or(z.literal("")),
+    /** Outstanding balance at form open; overpayment is rejected. */
+    maxAmount: z.number().nonnegative().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.maxAmount != null && data.amount > data.maxAmount) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["amount"],
+        message:
+          data.maxAmount <= 0
+            ? "This student has no outstanding balance."
+            : `Amount cannot exceed the outstanding balance (K${data.maxAmount}).`,
+      });
+    }
+  });
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 
