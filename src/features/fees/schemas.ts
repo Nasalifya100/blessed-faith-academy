@@ -72,3 +72,32 @@ export const recordPaymentSchema = z.object({
 });
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+
+export const optInOptionalFeesSchema = z.object({
+  studentId: z.string().uuid(),
+  termId: z.string().uuid().optional(),
+  mealFeeItemId: z.string().uuid().optional().nullable(),
+  uniformFeeItemIds: z.array(z.string().uuid()).default([]),
+});
+
+export type OptInOptionalFeesInput = z.infer<typeof optInOptionalFeesSchema>;
+
+export const setRequirementReceivedSchema = z.object({
+  studentId: z.string().uuid(),
+  requirementItemId: z.string().uuid(),
+  isReceived: z.boolean(),
+  notes: z.string().optional().or(z.literal("")),
+});
+
+export type SetRequirementReceivedInput = z.infer<
+  typeof setRequirementReceivedSchema
+>;
+
+export const cancelOptionalChargeSchema = z.object({
+  chargeId: z.string().uuid(),
+  studentId: z.string().uuid(),
+});
+
+export type CancelOptionalChargeInput = z.infer<
+  typeof cancelOptionalChargeSchema
+>;

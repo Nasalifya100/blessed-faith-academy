@@ -41,6 +41,38 @@ export default async function DashboardLayout({
         current.profile.role,
       ),
   );
+  const canSeeAttendance = Boolean(
+    current.profile?.role &&
+      ["administrator", "headteacher", "secretary", "teacher"].includes(
+        current.profile.role,
+      ),
+  );
+  const canSeeRules = Boolean(
+    current.profile?.role &&
+      [
+        "administrator",
+        "headteacher",
+        "secretary",
+        "teacher",
+        "bursar",
+      ].includes(current.profile.role),
+  );
+  const canSeeDiscipline = Boolean(
+    current.profile?.role &&
+      ["administrator", "headteacher", "secretary", "teacher"].includes(
+        current.profile.role,
+      ),
+  );
+  const canSeeReports = Boolean(
+    current.profile?.role &&
+      [
+        "administrator",
+        "headteacher",
+        "bursar",
+        "secretary",
+        "teacher",
+      ].includes(current.profile.role),
+  );
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -64,9 +96,35 @@ export default async function DashboardLayout({
           >
             Applications
           </Link>
+          {canSeeAttendance ? (
+            <Link
+              href="/dashboard/attendance"
+              className="text-sm hover:underline"
+            >
+              Attendance
+            </Link>
+          ) : null}
           {canSeeFees ? (
             <Link href="/dashboard/fees" className="text-sm hover:underline">
               Fees
+            </Link>
+          ) : null}
+          {canSeeRules ? (
+            <Link href="/dashboard/rules" className="text-sm hover:underline">
+              Rules
+            </Link>
+          ) : null}
+          {canSeeDiscipline ? (
+            <Link
+              href="/dashboard/discipline"
+              className="text-sm hover:underline"
+            >
+              Discipline
+            </Link>
+          ) : null}
+          {canSeeReports ? (
+            <Link href="/dashboard/reports" className="text-sm hover:underline">
+              Reports
             </Link>
           ) : null}
           {isAdmin ? (

@@ -1,6 +1,15 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+import { cancelOptionalChargeAction } from "@/features/fees/actions";
 import type { StudentFeeStatement } from "@/features/fees/queries";
+import { FEE_CATEGORY_LABELS } from "@/features/fees/schemas";
 import { formatKwacha } from "@/lib/money";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -17,11 +26,71 @@ const METHOD_LABELS: Record<string, string> = {
 
 interface FeeStatementProps {
   statement: StudentFeeStatement;
+  studentId: string;
+  canManageFees?: boolean;
 }
 
-export function FeeStatement({ statement }: FeeStatementProps) {
+function categoryLabel(category: string): string {
+  if (category in FEE_CATEGORY_LABELS) {
+    return FEE_CATEGORY_LABELS[category as keyof typeof FEE_CATEGORY_LABELS];
+  }
+  return category;
+}
+
+export function FeeStatement({
+  statement,
+  studentId,
+  canManageFees = false,
+}: FeeStatementProps) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const mealCharges = statement.charges.filter((c) => c.category === "meal");
+  const uniformCharges = statement.charges.filter(
+    (c) => c.category === "uniform",
+  );
+
+  function onCancel(chargeId: string) {
+    setError(null);
+    setPendingId(chargeId);
+    startTransition(async () => {
+      const result = await cancelOptionalChargeAction({
+        chargeId,
+        studentId,
+      });
+      setPendingId(null);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-6">
+      {(mealCharges.length > 0 || uniformCharges.length > 0) && (
+        <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+          <p className="font-medium">Optional on this statement</p>
+          <ul className="mt-1 space-y-0.5 text-muted-foreground">
+            {mealCharges.map((charge) => (
+              <li key={charge.id}>
+                Meal: {charge.description}
+                {charge.termName ? ` (${charge.termName})` : ""} —{" "}
+                {formatKwacha(charge.amount)}
+              </li>
+            ))}
+            {uniformCharges.map((charge) => (
+              <li key={charge.id}>
+                Uniform: {charge.description} — {formatKwacha(charge.amount)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">Total charged</p>
@@ -63,30 +132,75 @@ export function FeeStatement({ statement }: FeeStatementProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Item</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Term</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  {canManageFees ? <TableHead className="w-24" /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {statement.charges.map((charge) => (
-                  <TableRow key={charge.id}>
-                    <TableCell>{charge.description}</TableCell>
-                    <TableCell>{charge.termName ?? "Year"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {charge.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {formatKwacha(charge.amount)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {statement.charges.map((charge) => {
+                  const canCancel =
+                    canManageFees &&
+                    charge.isOptional &&
+                    (charge.category === "meal" ||
+                      charge.category === "uniform");
+                  return (
+                    <TableRow key={charge.id}>
+                      <TableCell>{charge.description}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={charge.isOptional ? "secondary" : "outline"}
+                        >
+                          {categoryLabel(charge.category)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{charge.termName ?? "Year"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {charge.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatKwacha(charge.amount)}
+                      </TableCell>
+                      {canManageFees ? (
+                        <TableCell className="text-right">
+                          {canCancel ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={isPending && pendingId === charge.id}
+                              onClick={() => onCancel(charge.id)}
+                            >
+                              {isPending && pendingId === charge.id
+                                ? "…"
+                                : "Remove"}
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
         )}
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {canManageFees &&
+        (mealCharges.length > 0 || uniformCharges.length > 0) ? (
+          <p className="text-xs text-muted-foreground">
+            Use Remove on a meal or uniform line to take it off the statement
+            (e.g. to switch meal plan).
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -110,12 +224,12 @@ export function FeeStatement({ statement }: FeeStatementProps) {
                 {statement.payments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-mono text-xs">
-                      <a
+                      <Link
                         href={`/dashboard/payments/${payment.id}/receipt`}
                         className="hover:underline"
                       >
                         {payment.receiptNumber}
-                      </a>
+                      </Link>
                     </TableCell>
                     <TableCell>
                       {METHOD_LABELS[payment.method] ?? payment.method}

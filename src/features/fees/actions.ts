@@ -5,9 +5,12 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
+  cancelOptionalChargeSchema,
   generateClassChargesSchema,
   generateStudentChargesSchema,
+  optInOptionalFeesSchema,
   recordPaymentSchema,
+  setRequirementReceivedSchema,
   updateScheduleAmountSchema,
 } from "./schemas";
 
@@ -17,6 +20,12 @@ export interface ActionResult {
 }
 
 const FEE_MANAGER_ROLES = ["administrator", "bursar", "headteacher"];
+const REQUIREMENT_TRACKER_ROLES = [
+  "administrator",
+  "bursar",
+  "headteacher",
+  "secretary",
+];
 const CONNECTION_ERROR =
   "Couldn't reach the server to verify your account. Check your internet connection and try again.";
 const SESSION_ERROR = "Your session has expired. Please sign in again.";
@@ -42,6 +51,30 @@ async function assertFeeManager(): Promise<
   return {
     ok: false,
     error: "You are not authorized to manage fees.",
+  };
+}
+
+async function assertRequirementTracker(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const current = await getCurrentUser();
+  if (!current) {
+    return { ok: false, error: SESSION_ERROR };
+  }
+  if (current.profileLoadFailed) {
+    return { ok: false, error: CONNECTION_ERROR };
+  }
+  const role = current.profile?.role;
+  if (
+    current.profile?.is_active &&
+    role &&
+    REQUIREMENT_TRACKER_ROLES.includes(role)
+  ) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    error: "You are not authorized to update requirements.",
   };
 }
 
@@ -183,4 +216,118 @@ export async function recordPaymentAction(
     revalidatePath(`/dashboard/payments/${id}/receipt`);
   }
   return { error: null, paymentId: id };
+}
+
+export interface OptInOptionalFeesResult {
+  error: string | null;
+  createdCount: number;
+}
+
+export async function optInOptionalFeesAction(
+  input: unknown,
+): Promise<OptInOptionalFeesResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error, createdCount: 0 };
+  }
+
+  const parsed = optInOptionalFeesSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Please check the form.",
+      createdCount: 0,
+    };
+  }
+
+  const { studentId, termId, mealFeeItemId, uniformFeeItemIds } = parsed.data;
+  const feeItemIds = [
+    ...(mealFeeItemId ? [mealFeeItemId] : []),
+    ...uniformFeeItemIds,
+  ];
+
+  if (feeItemIds.length === 0) {
+    return {
+      error: "Select a meal plan and/or at least one uniform item.",
+      createdCount: 0,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  let createdCount = 0;
+
+  for (const feeItemId of feeItemIds) {
+    const { data, error } = await supabase.rpc("create_optional_charge", {
+      p_student_id: studentId,
+      p_fee_item_id: feeItemId,
+      p_term_id: termId ?? null,
+    });
+
+    if (error) {
+      return { error: error.message, createdCount };
+    }
+    if (data) {
+      createdCount += 1;
+    }
+  }
+
+  revalidatePath(`/dashboard/students/${studentId}`);
+  return { error: null, createdCount };
+}
+
+export async function setRequirementReceivedAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertRequirementTracker();
+  if (!auth.ok) {
+    return { error: auth.error };
+  }
+
+  const parsed = setRequirementReceivedSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Please check the form.",
+    };
+  }
+
+  const data = parsed.data;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("set_requirement_received", {
+    p_student_id: data.studentId,
+    p_requirement_item_id: data.requirementItemId,
+    p_is_received: data.isReceived,
+    p_notes: data.notes?.trim() ?? "",
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/dashboard/students/${data.studentId}`);
+  return { error: null };
+}
+
+export async function cancelOptionalChargeAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error };
+  }
+
+  const parsed = cancelOptionalChargeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Invalid charge." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("cancel_optional_charge", {
+    p_charge_id: parsed.data.chargeId,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/dashboard/students/${parsed.data.studentId}`);
+  return { error: null };
 }

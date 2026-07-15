@@ -162,6 +162,8 @@ export interface StatementCharge {
   id: string;
   description: string;
   feeItemName: string;
+  category: string;
+  isOptional: boolean;
   amount: number;
   status: string;
   termName: string | null;
@@ -218,7 +220,7 @@ export async function getStudentFeeStatement(
     const { data: chargeRows } = await supabase
       .from("charges")
       .select(
-        "id, description, amount, status, created_at, fee_item:fee_items(name), term:terms(name)",
+        "id, description, amount, status, created_at, fee_item:fee_items(name, category, is_optional), term:terms(name)",
       )
       .eq("student_id", studentId)
       .eq("academic_year_id", year.id)
@@ -232,13 +234,19 @@ export async function getStudentFeeStatement(
         amount: number | string;
         status: string;
         created_at: string;
-        fee_item: { name: string } | null;
+        fee_item: {
+          name: string;
+          category: string;
+          is_optional: boolean;
+        } | null;
         term: { name: string } | null;
       }[] | null) ?? []
     ).map((row) => ({
       id: row.id,
-      description: row.description ?? row.fee_item?.name ?? "Charge",
+      description: row.fee_item?.name ?? row.description ?? "Charge",
       feeItemName: row.fee_item?.name ?? "-",
+      category: row.fee_item?.category ?? "other",
+      isOptional: row.fee_item?.is_optional ?? false,
       amount: Number(row.amount),
       status: row.status,
       termName: row.term?.name ?? null,
@@ -285,6 +293,316 @@ export async function getStudentFeeStatement(
     totalCharged,
     totalPaid,
     balance: totalCharged - totalPaid,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Optional meal / uniform opt-in options
+// ---------------------------------------------------------------------------
+
+export interface OptionalFeeOption {
+  id: string;
+  code: string;
+  name: string;
+  category: "meal" | "uniform";
+  billingFrequency: string;
+  amount: number;
+  alreadyCharged: boolean;
+}
+
+export interface OptionalFeeOptions {
+  academicYearName: string | null;
+  currentTermId: string | null;
+  currentTermName: string | null;
+  meals: OptionalFeeOption[];
+  uniforms: OptionalFeeOption[];
+  activeMealFeeItemId: string | null;
+}
+
+export async function getOptionalFeeOptions(
+  studentId: string,
+): Promise<OptionalFeeOptions> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: year } = await supabase
+    .from("academic_years")
+    .select("id, name")
+    .eq("is_current", true)
+    .maybeSingle();
+
+  let currentTermId: string | null = null;
+  let currentTermName: string | null = null;
+
+  if (year?.id) {
+    const { data: term } = await supabase
+      .from("terms")
+      .select("id, name")
+      .eq("academic_year_id", year.id)
+      .eq("is_current", true)
+      .maybeSingle();
+    currentTermId = term?.id ?? null;
+    currentTermName = term?.name ?? null;
+  }
+
+  const { data: itemRows } = await supabase
+    .from("fee_items")
+    .select("id, code, name, category, billing_frequency, sort_order")
+    .eq("is_active", true)
+    .eq("is_optional", true)
+    .in("category", ["meal", "uniform"])
+    .order("sort_order", { ascending: true });
+
+  const items =
+    (itemRows as {
+      id: string;
+      code: string;
+      name: string;
+      category: string;
+      billing_frequency: string;
+      sort_order: number;
+    }[] | null) ?? [];
+
+  const amountByItem = new Map<string, number>();
+  if (year?.id && items.length > 0) {
+    const { data: scheduleRows } = await supabase
+      .from("fee_schedules")
+      .select("fee_item_id, amount, grade_level_id")
+      .eq("academic_year_id", year.id)
+      .eq("is_active", true)
+      .in(
+        "fee_item_id",
+        items.map((item) => item.id),
+      );
+
+    for (const row of (scheduleRows as {
+      fee_item_id: string;
+      amount: number | string;
+      grade_level_id: string | null;
+    }[] | null) ?? []) {
+      // Prefer school-wide (null grade) for optional items; first wins
+      if (!amountByItem.has(row.fee_item_id) || row.grade_level_id === null) {
+        amountByItem.set(row.fee_item_id, Number(row.amount));
+      }
+    }
+  }
+
+  const mealItemIds = new Set(
+    items.filter((item) => item.category === "meal").map((item) => item.id),
+  );
+  const uniformItemIds = new Set(
+    items.filter((item) => item.category === "uniform").map((item) => item.id),
+  );
+
+  const chargedItemIds = new Set<string>();
+  let activeMealFeeItemId: string | null = null;
+
+  if (year?.id) {
+    const { data: chargeRows } = await supabase
+      .from("charges")
+      .select("fee_item_id, term_id")
+      .eq("student_id", studentId)
+      .eq("academic_year_id", year.id)
+      .neq("status", "cancelled");
+
+    for (const row of (chargeRows as {
+      fee_item_id: string;
+      term_id: string | null;
+    }[] | null) ?? []) {
+      if (mealItemIds.has(row.fee_item_id)) {
+        if (currentTermId && row.term_id === currentTermId) {
+          chargedItemIds.add(row.fee_item_id);
+          activeMealFeeItemId = row.fee_item_id;
+        }
+      } else if (uniformItemIds.has(row.fee_item_id)) {
+        chargedItemIds.add(row.fee_item_id);
+      }
+    }
+  }
+
+  const meals: OptionalFeeOption[] = [];
+  const uniforms: OptionalFeeOption[] = [];
+
+  for (const item of items) {
+    if (item.category !== "meal" && item.category !== "uniform") {
+      continue;
+    }
+    const option: OptionalFeeOption = {
+      id: item.id,
+      code: item.code,
+      name: item.name,
+      category: item.category,
+      billingFrequency: item.billing_frequency,
+      amount: amountByItem.get(item.id) ?? 0,
+      alreadyCharged: chargedItemIds.has(item.id),
+    };
+    if (item.category === "meal") {
+      meals.push(option);
+    } else {
+      uniforms.push(option);
+    }
+  }
+
+  return {
+    academicYearName: year?.name ?? null,
+    currentTermId,
+    currentTermName,
+    meals,
+    uniforms,
+    activeMealFeeItemId,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Student requirements checklist (not money)
+// ---------------------------------------------------------------------------
+
+export type RequirementBand = "preschool" | "lower" | "upper" | "all";
+
+export interface StudentRequirementRow {
+  id: string;
+  name: string;
+  band: RequirementBand;
+  quantity: string | null;
+  isReceived: boolean;
+  receivedOn: string | null;
+  notes: string;
+}
+
+export interface StudentRequirementsChecklist {
+  academicYearName: string | null;
+  gradeLevelName: string | null;
+  band: RequirementBand | null;
+  items: StudentRequirementRow[];
+  receivedCount: number;
+  totalCount: number;
+}
+
+/** Map grade sort_order (Baby=1 … Grade 7=11) to Sheet 1 requirement band. */
+function bandFromGradeSortOrder(sortOrder: number): RequirementBand {
+  if (sortOrder <= 4) return "preschool";
+  if (sortOrder <= 8) return "lower";
+  return "upper";
+}
+
+export async function getStudentRequirementsChecklist(
+  studentId: string,
+): Promise<StudentRequirementsChecklist> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: year } = await supabase
+    .from("academic_years")
+    .select("id, name")
+    .eq("is_current", true)
+    .maybeSingle();
+
+  let gradeLevelName: string | null = null;
+  let band: RequirementBand | null = null;
+
+  if (year?.id) {
+    const { data: enrolment } = await supabase
+      .from("student_class_enrollments")
+      .select(
+        "class:classes(grade_level:grade_levels(name, sort_order))",
+      )
+      .eq("student_id", studentId)
+      .eq("academic_year_id", year.id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    const grade = (
+      enrolment as {
+        class: {
+          grade_level: { name: string; sort_order: number } | null;
+        } | null;
+      } | null
+    )?.class?.grade_level;
+
+    if (grade) {
+      gradeLevelName = grade.name;
+      band = bandFromGradeSortOrder(grade.sort_order);
+    }
+  }
+
+  const bandsToLoad: RequirementBand[] = band
+    ? [band, "all"]
+    : ["preschool", "lower", "upper", "all"];
+
+  const { data: itemRows } = await supabase
+    .from("requirement_items")
+    .select("id, name, band, quantity, sort_order")
+    .eq("is_active", true)
+    .in("band", bandsToLoad)
+    .order("sort_order", { ascending: true });
+
+  const itemsBase =
+    (itemRows as {
+      id: string;
+      name: string;
+      band: string;
+      quantity: string | null;
+      sort_order: number;
+    }[] | null) ?? [];
+
+  // Prefer the student's band items; if no grade yet, show nothing specific
+  const filtered =
+    band != null
+      ? itemsBase.filter(
+          (item) => item.band === band || item.band === "all",
+        )
+      : [];
+
+  const receivedByItem = new Map<
+    string,
+    { isReceived: boolean; receivedOn: string | null; notes: string }
+  >();
+
+  if (year?.id && filtered.length > 0) {
+    const { data: checkRows } = await supabase
+      .from("student_requirement_checks")
+      .select("requirement_item_id, is_received, received_on, notes")
+      .eq("student_id", studentId)
+      .eq("academic_year_id", year.id)
+      .in(
+        "requirement_item_id",
+        filtered.map((item) => item.id),
+      );
+
+    for (const row of (checkRows as {
+      requirement_item_id: string;
+      is_received: boolean;
+      received_on: string | null;
+      notes: string | null;
+    }[] | null) ?? []) {
+      receivedByItem.set(row.requirement_item_id, {
+        isReceived: row.is_received,
+        receivedOn: row.received_on,
+        notes: row.notes ?? "",
+      });
+    }
+  }
+
+  const items: StudentRequirementRow[] = filtered.map((item) => {
+    const check = receivedByItem.get(item.id);
+    return {
+      id: item.id,
+      name: item.name,
+      band: item.band as RequirementBand,
+      quantity: item.quantity,
+      isReceived: check?.isReceived ?? false,
+      receivedOn: check?.receivedOn ?? null,
+      notes: check?.notes ?? "",
+    };
+  });
+
+  const receivedCount = items.filter((item) => item.isReceived).length;
+
+  return {
+    academicYearName: year?.name ?? null,
+    gradeLevelName,
+    band,
+    items,
+    receivedCount,
+    totalCount: items.length,
   };
 }
 

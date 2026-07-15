@@ -3,7 +3,16 @@ import { notFound } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { getStudentProfile } from "@/features/students/queries";
-import { getStudentFeeStatement } from "@/features/fees/queries";
+import {
+  getOptionalFeeOptions,
+  getStudentFeeStatement,
+  getStudentRequirementsChecklist,
+} from "@/features/fees/queries";
+import { getStudentAttendanceHistory } from "@/features/attendance/queries";
+import {
+  listSchoolRules,
+  listStudentDisciplineIncidents,
+} from "@/features/discipline/queries";
 import {
   GENDER_LABELS,
   RELATIONSHIP_LABELS,
@@ -11,7 +20,12 @@ import {
 import { StudentStatusBadge } from "@/features/students/components/status-badge";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
+import { OptionalFeesOptInForm } from "@/features/fees/components/optional-fees-opt-in-form";
 import { RecordPaymentForm } from "@/features/fees/components/record-payment-form";
+import { RequirementsChecklist } from "@/features/fees/components/requirements-checklist";
+import { StudentAttendanceHistoryView } from "@/features/attendance/components/student-attendance-history";
+import { RecordDisciplineIncidentForm } from "@/features/discipline/components/record-discipline-incident-form";
+import { StudentDisciplineList } from "@/features/discipline/components/student-discipline-list";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -30,6 +44,23 @@ import {
 } from "@/components/ui/table";
 
 const FEE_MANAGER_ROLES = ["administrator", "bursar", "headteacher"];
+const REQUIREMENT_TRACKER_ROLES = [
+  "administrator",
+  "bursar",
+  "headteacher",
+  "secretary",
+];
+const DISCIPLINE_RECORD_ROLES = [
+  "administrator",
+  "headteacher",
+  "secretary",
+  "teacher",
+];
+const DISCIPLINE_RESOLVE_ROLES = [
+  "administrator",
+  "headteacher",
+  "secretary",
+];
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
@@ -57,19 +88,48 @@ export default async function StudentProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [student, current, statement] = await Promise.all([
+  const [
+    student,
+    current,
+    statement,
+    optionalFees,
+    requirements,
+    attendance,
+    incidents,
+    rules,
+  ] = await Promise.all([
     getStudentProfile(id),
     getCurrentUser(),
     getStudentFeeStatement(id),
+    getOptionalFeeOptions(id),
+    getStudentRequirementsChecklist(id),
+    getStudentAttendanceHistory(id),
+    listStudentDisciplineIncidents(id),
+    listSchoolRules({ activeOnly: true }),
   ]);
 
   if (!student) {
     notFound();
   }
 
+  const role = current?.profile?.role;
   const canManageFees = Boolean(
-    current?.profile?.role &&
-      FEE_MANAGER_ROLES.includes(current.profile.role),
+    role && FEE_MANAGER_ROLES.includes(role),
+  );
+  const canTrackRequirements = Boolean(
+    current?.profile?.is_active &&
+      role &&
+      REQUIREMENT_TRACKER_ROLES.includes(role),
+  );
+  const canRecordDiscipline = Boolean(
+    current?.profile?.is_active &&
+      role &&
+      DISCIPLINE_RECORD_ROLES.includes(role),
+  );
+  const canResolveDiscipline = Boolean(
+    current?.profile?.is_active &&
+      role &&
+      DISCIPLINE_RESOLVE_ROLES.includes(role),
   );
 
   return (
@@ -230,25 +290,102 @@ export default async function StudentProfilePage({
             {statement.currentTermName
               ? ` · current term: ${statement.currentTermName}`
               : ""}
-            . Mandatory fees only (tuition + report book, PTA, maintenance).
-            Optional meals and uniforms are added later when opted in.
+            . Generate mandatory fees first, then opt in to meals and uniforms
+            below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {canManageFees && student.status === "enrolled" ? (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <GenerateStudentChargesButton
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <GenerateStudentChargesButton
+                  studentId={student.id}
+                  termId={statement.currentTermId}
+                  termName={statement.currentTermName}
+                />
+                <RecordPaymentForm
+                  studentId={student.id}
+                  currentBalance={statement.balance}
+                />
+              </div>
+              <OptionalFeesOptInForm
                 studentId={student.id}
-                termId={statement.currentTermId}
-                termName={statement.currentTermName}
-              />
-              <RecordPaymentForm
-                studentId={student.id}
-                currentBalance={statement.balance}
+                termId={optionalFees.currentTermId}
+                termName={optionalFees.currentTermName}
+                meals={optionalFees.meals}
+                uniforms={optionalFees.uniforms}
+                activeMealFeeItemId={optionalFees.activeMealFeeItemId}
               />
             </div>
           ) : null}
-          <FeeStatement statement={statement} />
+          <FeeStatement
+            statement={statement}
+            studentId={student.id}
+            canManageFees={canManageFees}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Requirements checklist</CardTitle>
+          <CardDescription>
+            Tick items as parents bring them in. This is not billed as money.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RequirementsChecklist
+            studentId={student.id}
+            academicYearName={requirements.academicYearName}
+            gradeLevelName={requirements.gradeLevelName}
+            band={requirements.band}
+            items={requirements.items}
+            receivedCount={requirements.receivedCount}
+            totalCount={requirements.totalCount}
+            canEdit={canTrackRequirements}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Attendance</CardTitle>
+          <CardDescription>
+            Register marks for the current academic year.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StudentAttendanceHistoryView history={attendance} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Discipline</CardTitle>
+          <CardDescription>
+            Behaviour and discipline incidents. See{" "}
+            <Link href="/dashboard/rules" className="underline">
+              school rules
+            </Link>{" "}
+            or the{" "}
+            <Link href="/dashboard/discipline" className="underline">
+              school-wide list
+            </Link>
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {canRecordDiscipline ? (
+            <RecordDisciplineIncidentForm
+              studentId={student.id}
+              rules={rules}
+            />
+          ) : null}
+          <StudentDisciplineList
+            studentId={student.id}
+            incidents={incidents}
+            canResolve={canResolveDiscipline}
+          />
         </CardContent>
       </Card>
 
