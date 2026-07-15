@@ -15,6 +15,25 @@ export const GENDER_LABELS: Record<(typeof GENDERS)[number], string> = {
   female: "Female",
 };
 
+export const STUDENT_STATUSES = [
+  "applicant",
+  "enrolled",
+  "withdrawn",
+  "graduated",
+  "rejected",
+] as const;
+
+export const STUDENT_STATUS_LABELS: Record<
+  (typeof STUDENT_STATUSES)[number],
+  string
+> = {
+  applicant: "Applicant",
+  enrolled: "Enrolled",
+  withdrawn: "Withdrawn",
+  graduated: "Graduated",
+  rejected: "Rejected",
+};
+
 export const RELATIONSHIP_LABELS: Record<
   (typeof GUARDIAN_RELATIONSHIPS)[number],
   string
