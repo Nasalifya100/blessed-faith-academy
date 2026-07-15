@@ -28,6 +28,18 @@ function formatDay(value: string): string {
   });
 }
 
+function formatWhen(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-ZM", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function statusVariant(
   status: AttendanceStatus,
 ): "default" | "secondary" | "outline" | "destructive" {
@@ -39,7 +51,7 @@ function statusVariant(
 export function StudentAttendanceHistoryView({
   history,
 }: StudentAttendanceHistoryProps) {
-  const { summary, days, academicYearName } = history;
+  const { summary, days, corrections, academicYearName } = history;
 
   if (summary.total === 0) {
     return (
@@ -106,6 +118,41 @@ export function StudentAttendanceHistoryView({
           Showing the {days.length} most recent days ({summary.total} total this
           year).
         </p>
+      ) : null}
+
+      {corrections.length > 0 ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Corrections</h3>
+          <div className="rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Day</TableHead>
+                  <TableHead>Change</TableHead>
+                  <TableHead>By</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {corrections.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatWhen(row.changedAt)}
+                    </TableCell>
+                    <TableCell>{formatDay(row.date)}</TableCell>
+                    <TableCell className="text-sm">
+                      {ATTENDANCE_STATUS_LABELS[row.oldStatus]} →{" "}
+                      {ATTENDANCE_STATUS_LABELS[row.newStatus]}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {row.changedByName ?? "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       ) : null}
     </div>
   );

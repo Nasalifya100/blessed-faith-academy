@@ -338,9 +338,22 @@ export interface StudentAttendanceDay {
   className: string;
 }
 
+export interface AttendanceCorrection {
+  id: string;
+  attendanceRecordId: string;
+  date: string;
+  oldStatus: AttendanceStatus;
+  newStatus: AttendanceStatus;
+  oldNotes: string;
+  newNotes: string;
+  changedAt: string;
+  changedByName: string | null;
+}
+
 export interface StudentAttendanceHistory {
   academicYearName: string | null;
   days: StudentAttendanceDay[];
+  corrections: AttendanceCorrection[];
   summary: {
     present: number;
     absent: number;
@@ -357,6 +370,13 @@ export async function getStudentAttendanceHistory(
   const supabase = await createSupabaseServerClient();
   const limit = options?.limit ?? 40;
 
+  const empty: StudentAttendanceHistory = {
+    academicYearName: null,
+    days: [],
+    corrections: [],
+    summary: { present: 0, absent: 0, late: 0, excused: 0, total: 0 },
+  };
+
   const { data: year } = await supabase
     .from("academic_years")
     .select("id, name, start_date, end_date")
@@ -364,11 +384,7 @@ export async function getStudentAttendanceHistory(
     .maybeSingle();
 
   if (!year?.id) {
-    return {
-      academicYearName: null,
-      days: [],
-      summary: { present: 0, absent: 0, late: 0, excused: 0, total: 0 },
-    };
+    return empty;
   }
 
   const yearInfo = year as {
@@ -440,9 +456,67 @@ export async function getStudentAttendanceHistory(
     total: statuses.length,
   };
 
+  const { data: auditRows } = await supabase
+    .from("attendance_record_audits")
+    .select(
+      "id, attendance_record_id, attendance_date, old_status, new_status, old_notes, new_notes, changed_at, changed_by",
+    )
+    .eq("student_id", studentId)
+    .gte("attendance_date", yearInfo.start_date)
+    .lte("attendance_date", yearInfo.end_date)
+    .order("changed_at", { ascending: false })
+    .limit(20);
+
+  const audits =
+    (auditRows as {
+      id: string;
+      attendance_record_id: string;
+      attendance_date: string;
+      old_status: AttendanceStatus;
+      new_status: AttendanceStatus;
+      old_notes: string | null;
+      new_notes: string | null;
+      changed_at: string;
+      changed_by: string | null;
+    }[] | null) ?? [];
+
+  const changerIds = [
+    ...new Set(
+      audits
+        .map((row) => row.changed_by)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const nameById = new Map<string, string>();
+  if (changerIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", changerIds);
+    for (const profile of (profiles as { id: string; full_name: string }[] | null) ??
+      []) {
+      nameById.set(profile.id, profile.full_name);
+    }
+  }
+
+  const corrections: AttendanceCorrection[] = audits.map((row) => ({
+    id: row.id,
+    attendanceRecordId: row.attendance_record_id,
+    date: row.attendance_date,
+    oldStatus: row.old_status,
+    newStatus: row.new_status,
+    oldNotes: row.old_notes ?? "",
+    newNotes: row.new_notes ?? "",
+    changedAt: row.changed_at,
+    changedByName: row.changed_by
+      ? (nameById.get(row.changed_by) ?? null)
+      : null,
+  }));
+
   return {
     academicYearName: yearInfo.name,
     days,
+    corrections,
     summary,
   };
 }

@@ -79,6 +79,7 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716110000_application_review_guards.sql` | Approve/reject validation (consent, guardians, reason) |
 | `20260716110100_transfer_student_class.sql` | Mid-year class transfer + one active enrolment per year |
 | `20260716120000_config_integrity_constraints.sql` | Admission uniqueness, one current year/term, unique fee schedules |
+| `20260716120100_attendance_audit_and_soft_delete.sql` | Attendance correction audit; revoke hard DELETE on attendance/rules/incidents |
 
 ### Auth / signup (required)
 
@@ -185,6 +186,8 @@ Exact names live in the migration files. High-level groups:
 | Requirements | Upsert student requirement checks |
 | Attendance | Save class attendance; assign/revoke cover; list classes for attendance |
 | Discipline | Create incident; resolve incident |
+
+Attendance marks and discipline incidents are not hard-deleted in normal use. Correct a register mark to overwrite it (prior status is kept in `attendance_record_audits`). Deactivate school rules with `is_active = false`; revoke covers instead of deleting them.
 
 If the UI shows an RPC/function missing error, the matching migration was not applied.
 
