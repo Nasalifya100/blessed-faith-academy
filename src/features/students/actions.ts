@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
-import { createStudentSchema, mapGuardianPayload } from "./schemas";
+import { createStudentSchema, mapGuardianPayload, archiveStudentSchema } from "./schemas";
 
 export interface CreateStudentResult {
   error: string | null;
@@ -112,4 +112,34 @@ export async function createStudentAction(
     nextAdmissionNumber:
       typeof nextSuggested === "string" ? nextSuggested : null,
   };
+}
+
+export async function archiveStudentAction(
+  input: unknown,
+): Promise<{ error: string | null }> {
+  const auth = await assertStudentManager();
+  if (!auth.ok) {
+    return { error: auth.error };
+  }
+
+  const parsed = archiveStudentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Invalid request.",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("archive_student", {
+    p_student_id: parsed.data.studentId,
+    p_reason: parsed.data.reason?.trim() ?? "",
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/dashboard/students/${parsed.data.studentId}`);
+  revalidatePath("/dashboard/students");
+  return { error: null };
 }

@@ -240,6 +240,8 @@ export interface StudentProfile {
   vaccinationDate: string | null;
   medicalNotes: string | null;
   isZambianCitizen: boolean | null;
+  archivedAt: string | null;
+  archiveReason: string | null;
   currentClassName: string | null;
   guardians: StudentGuardianView[];
   enrolments: StudentEnrolmentView[];
@@ -280,7 +282,7 @@ export async function getStudentProfile(
   const { data: student } = await supabase
     .from("students")
     .select(
-      "id, admission_number, first_name, middle_name, last_name, date_of_birth, gender, status, enrollment_date, place_of_birth, religious_denomination, previous_school, proposed_admission_date, vaccinated_smallpox, vaccination_date, medical_notes, is_zambian_citizen",
+      "id, admission_number, first_name, middle_name, last_name, date_of_birth, gender, status, enrollment_date, place_of_birth, religious_denomination, previous_school, proposed_admission_date, is_zambian_citizen, archived_at, archive_reason",
     )
     .eq("id", id)
     .maybeSingle();
@@ -288,6 +290,12 @@ export async function getStudentProfile(
   if (!student) {
     return null;
   }
+
+  const { data: medical } = await supabase
+    .from("student_medical")
+    .select("medical_notes, vaccinated_smallpox, vaccination_date")
+    .eq("student_id", id)
+    .maybeSingle();
 
   const { data: guardianRows } = await supabase
     .from("student_guardians")
@@ -340,18 +348,30 @@ export async function getStudentProfile(
   const currentClassName =
     enrolments.find((enrolment) => enrolment.isCurrent)?.className ?? null;
 
-  const student_ = student as StudentRow & {
+  const student_ = student as {
+    id: string;
+    admission_number: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
     date_of_birth: string;
+    gender: string;
+    status: string;
     enrollment_date: string;
     place_of_birth: string | null;
     religious_denomination: string | null;
     previous_school: string | null;
     proposed_admission_date: string | null;
+    is_zambian_citizen: boolean | null;
+    archived_at: string | null;
+    archive_reason: string | null;
+  };
+
+  const medicalRow = medical as {
+    medical_notes: string | null;
     vaccinated_smallpox: boolean | null;
     vaccination_date: string | null;
-    medical_notes: string | null;
-    is_zambian_citizen: boolean | null;
-  };
+  } | null;
 
   return {
     id: student_.id,
@@ -370,10 +390,12 @@ export async function getStudentProfile(
     religiousDenomination: student_.religious_denomination,
     previousSchool: student_.previous_school,
     proposedAdmissionDate: student_.proposed_admission_date,
-    vaccinatedSmallpox: student_.vaccinated_smallpox,
-    vaccinationDate: student_.vaccination_date,
-    medicalNotes: student_.medical_notes,
+    vaccinatedSmallpox: medicalRow?.vaccinated_smallpox ?? null,
+    vaccinationDate: medicalRow?.vaccination_date ?? null,
+    medicalNotes: medicalRow?.medical_notes ?? null,
     isZambianCitizen: student_.is_zambian_citizen,
+    archivedAt: student_.archived_at,
+    archiveReason: student_.archive_reason,
     currentClassName,
     guardians,
     enrolments,

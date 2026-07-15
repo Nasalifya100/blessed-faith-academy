@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { canManageApplications } from "@/features/auth/permissions";
 import { ROLE_LABELS } from "@/features/auth/types";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 
@@ -13,6 +14,22 @@ export default async function DashboardLayout({
   const current = await getCurrentUser();
   if (!current) {
     redirect("/login");
+  }
+
+  // Authenticated but no profile — cannot use the app until staff is set up.
+  if (!current.profileLoadFailed && !current.profile) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold">No staff profile</h1>
+          <p className="text-muted-foreground">
+            Your login has no school role assigned. Please contact an
+            administrator.
+          </p>
+        </div>
+        <SignOutButton />
+      </main>
+    );
   }
 
   // A deactivated staff member keeps a valid session but must not use the app.
@@ -35,6 +52,7 @@ export default async function DashboardLayout({
     ? ROLE_LABELS[current.profile.role]
     : "No role assigned";
   const isAdmin = current.profile?.role === "administrator";
+  const canSeeApplications = canManageApplications(current.profile?.role);
   const canSeeFees = Boolean(
     current.profile?.role &&
       ["administrator", "bursar", "headteacher", "secretary"].includes(
@@ -90,12 +108,14 @@ export default async function DashboardLayout({
           <Link href="/dashboard/students" className="text-sm hover:underline">
             Students
           </Link>
-          <Link
-            href="/dashboard/applications"
-            className="text-sm hover:underline"
-          >
-            Applications
-          </Link>
+          {canSeeApplications ? (
+            <Link
+              href="/dashboard/applications"
+              className="text-sm hover:underline"
+            >
+              Applications
+            </Link>
+          ) : null}
           {canSeeAttendance ? (
             <Link
               href="/dashboard/attendance"

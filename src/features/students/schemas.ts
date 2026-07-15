@@ -173,3 +173,10 @@ export function emptyGuardian(isPrimary: boolean): GuardianInput {
     is_emergency_contact: false,
   };
 }
+
+export const archiveStudentSchema = z.object({
+  studentId: z.string().uuid(),
+  reason: z.string().optional().or(z.literal("")),
+});
+
+export type ArchiveStudentInput = z.infer<typeof archiveStudentSchema>;

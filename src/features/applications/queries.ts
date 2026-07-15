@@ -127,9 +127,6 @@ interface ApplicationDetailRow {
     religious_denomination: string | null;
     previous_school: string | null;
     proposed_admission_date: string | null;
-    vaccinated_smallpox: boolean | null;
-    vaccination_date: string | null;
-    medical_notes: string | null;
     is_zambian_citizen: boolean | null;
   } | null;
   applied_class: {
@@ -161,7 +158,7 @@ export async function getApplicationDetail(
   const { data: row } = await supabase
     .from("applications")
     .select(
-      "id, status, submitted_at, reviewed_at, decision_notes, consent_agreed, consent_signed_by, consent_signed_at, emergency_contact_phone, media_release_agreed, submitted_by, reviewed_by, student:students(id, first_name, middle_name, last_name, admission_number, date_of_birth, gender, status, place_of_birth, religious_denomination, previous_school, proposed_admission_date, vaccinated_smallpox, vaccination_date, medical_notes, is_zambian_citizen), applied_class:classes(id, name, grade_level:grade_levels(name))",
+      "id, status, submitted_at, reviewed_at, decision_notes, consent_agreed, consent_signed_by, consent_signed_at, emergency_contact_phone, media_release_agreed, submitted_by, reviewed_by, student:students(id, first_name, middle_name, last_name, admission_number, date_of_birth, gender, status, place_of_birth, religious_denomination, previous_school, proposed_admission_date, is_zambian_citizen), applied_class:classes(id, name, grade_level:grade_levels(name))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -171,6 +168,27 @@ export async function getApplicationDetail(
   }
 
   const application = row as unknown as ApplicationDetailRow;
+
+  let medical: {
+    medical_notes: string | null;
+    vaccinated_smallpox: boolean | null;
+    vaccination_date: string | null;
+  } | null = null;
+
+  if (application.student?.id) {
+    const { data: medicalRow } = await supabase
+      .from("student_medical")
+      .select("medical_notes, vaccinated_smallpox, vaccination_date")
+      .eq("student_id", application.student.id)
+      .maybeSingle();
+    if (medicalRow) {
+      medical = medicalRow as {
+        medical_notes: string | null;
+        vaccinated_smallpox: boolean | null;
+        vaccination_date: string | null;
+      };
+    }
+  }
 
   const { data: guardianRows } = await supabase
     .from("student_guardians")
@@ -251,9 +269,9 @@ export async function getApplicationDetail(
           religiousDenomination: application.student.religious_denomination,
           previousSchool: application.student.previous_school,
           proposedAdmissionDate: application.student.proposed_admission_date,
-          vaccinatedSmallpox: application.student.vaccinated_smallpox,
-          vaccinationDate: application.student.vaccination_date,
-          medicalNotes: application.student.medical_notes,
+          vaccinatedSmallpox: medical?.vaccinated_smallpox ?? null,
+          vaccinationDate: medical?.vaccination_date ?? null,
+          medicalNotes: medical?.medical_notes ?? null,
           isZambianCitizen: application.student.is_zambian_citizen,
         }
       : null,

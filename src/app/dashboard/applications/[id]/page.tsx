@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import {
+  canManageApplications,
+  canViewStudentMedical,
+} from "@/features/auth/permissions";
 import { getApplicationDetail } from "@/features/applications/queries";
 import { getCurrentYearClasses } from "@/features/students/queries";
 import { GENDER_LABELS, RELATIONSHIP_LABELS } from "@/features/students/schemas";
@@ -57,7 +61,11 @@ export default async function ApplicationDetailPage({
   }
 
   const role = current?.profile?.role;
+  if (!canManageApplications(role)) {
+    redirect("/dashboard");
+  }
   const canReview = Boolean(role && REVIEWER_ROLES.includes(role));
+  const canSeeMedical = canViewStudentMedical(role);
   const isPending =
     application.status === "submitted" || application.status === "draft";
 
@@ -134,25 +142,29 @@ export default async function ApplicationDetailPage({
                     : "No"
               }
             />
-            <Detail
-              label="Vaccinated (smallpox)"
-              value={
-                application.student?.vaccinatedSmallpox === null ||
-                application.student?.vaccinatedSmallpox === undefined
-                  ? "-"
-                  : application.student.vaccinatedSmallpox
-                    ? `Yes${
-                        application.student.vaccinationDate
-                          ? ` (${formatDate(application.student.vaccinationDate)})`
-                          : ""
-                      }`
-                    : "No"
-              }
-            />
-            <Detail
-              label="Medical notes / allergies"
-              value={application.student?.medicalNotes ?? "-"}
-            />
+            {canSeeMedical ? (
+              <>
+                <Detail
+                  label="Vaccinated (smallpox)"
+                  value={
+                    application.student?.vaccinatedSmallpox === null ||
+                    application.student?.vaccinatedSmallpox === undefined
+                      ? "-"
+                      : application.student.vaccinatedSmallpox
+                        ? `Yes${
+                            application.student.vaccinationDate
+                              ? ` (${formatDate(application.student.vaccinationDate)})`
+                              : ""
+                          }`
+                        : "No"
+                  }
+                />
+                <Detail
+                  label="Medical notes / allergies"
+                  value={application.student?.medicalNotes ?? "-"}
+                />
+              </>
+            ) : null}
           </dl>
         </CardContent>
       </Card>

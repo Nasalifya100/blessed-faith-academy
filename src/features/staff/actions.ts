@@ -64,15 +64,34 @@ export async function createStaffAction(
   const { full_name, email, password, role } = parsed.data;
 
   const supabaseAdmin = createSupabaseAdminClient();
-  const { error } = await supabaseAdmin.auth.admin.createUser({
+  // Do not put role in metadata — handle_new_user ignores it and always
+  // creates teacher. Assign the real role via profiles UPDATE below.
+  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name, role },
+    user_metadata: { full_name },
   });
 
   if (error) {
     return { error: error.message };
+  }
+
+  const newUserId = created.user?.id;
+  if (!newUserId) {
+    return { error: "Staff account was created but no user id was returned." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { error: roleError } = await supabase
+    .from("profiles")
+    .update({ role, full_name })
+    .eq("id", newUserId);
+
+  if (roleError) {
+    return {
+      error: `Account created, but role could not be set (${roleError.message}). Open Staff and set the role manually.`,
+    };
   }
 
   revalidatePath("/dashboard/staff");

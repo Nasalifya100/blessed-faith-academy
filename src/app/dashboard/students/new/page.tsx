@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { canManageStudents } from "@/features/auth/permissions";
 import { getEnrolmentFormData } from "@/features/students/queries";
 import { AddStudentForm } from "@/features/students/components/add-student-form";
 import {
@@ -12,12 +13,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-const MANAGER_ROLES = ["administrator", "headteacher", "secretary"];
-
 export default async function NewStudentPage() {
   const current = await getCurrentUser();
   const role = current?.profile?.role;
-  if (!role || !MANAGER_ROLES.includes(role)) {
+  if (!canManageStudents(role)) {
     redirect("/dashboard");
   }
 

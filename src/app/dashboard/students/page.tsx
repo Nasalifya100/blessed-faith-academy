@@ -23,7 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const MANAGER_ROLES = ["administrator", "headteacher", "secretary"];
+import { canManageStudents } from "@/features/auth/permissions";
 
 function firstValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
@@ -37,19 +37,21 @@ export default async function StudentsPage({
 }) {
   const params = await searchParams;
   const q = firstValue(params.q);
-  const status = firstValue(params.status);
+  const statusParam = firstValue(params.status);
+  const statusFilterUnset = params.status === undefined;
+  const status = statusFilterUnset ? "enrolled" : statusParam;
   const classId = firstValue(params.class);
 
   const current = await getCurrentUser();
   const role = current?.profile?.role;
-  const canManage = Boolean(role && MANAGER_ROLES.includes(role));
+  const canManage = canManageStudents(role);
 
   const [{ classes }, students] = await Promise.all([
     getCurrentYearClasses(),
     listStudents({ q, status, classId }),
   ]);
 
-  const hasFilters = Boolean(q || status || classId);
+  const hasFilters = Boolean(q || !statusFilterUnset || classId);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -88,7 +90,7 @@ export default async function StudentsPage({
           <SelectNative
             id="status"
             name="status"
-            defaultValue={status}
+            defaultValue={statusFilterUnset ? "enrolled" : status}
             className="w-40"
           >
             <option value="">All statuses</option>

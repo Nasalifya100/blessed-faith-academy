@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { canManageApplications } from "@/features/auth/permissions";
 import { listApplications } from "@/features/applications/queries";
 import {
   APPLICATION_STATUSES,
@@ -18,8 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const MANAGER_ROLES = ["administrator", "headteacher", "secretary"];
 
 function firstValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
@@ -48,7 +48,10 @@ export default async function ApplicationsPage({
 
   const current = await getCurrentUser();
   const role = current?.profile?.role;
-  const canManage = Boolean(role && MANAGER_ROLES.includes(role));
+  if (!canManageApplications(role)) {
+    redirect("/dashboard");
+  }
+  const canManage = true;
 
   const applications = await listApplications(status || undefined);
 

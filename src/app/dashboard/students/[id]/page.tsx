@@ -2,6 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import {
+  canManageStudents,
+  canViewStudentMedical,
+} from "@/features/auth/permissions";
 import { getStudentProfile } from "@/features/students/queries";
 import {
   getOptionalFeeOptions,
@@ -18,6 +22,7 @@ import {
   RELATIONSHIP_LABELS,
 } from "@/features/students/schemas";
 import { StudentStatusBadge } from "@/features/students/components/status-badge";
+import { ArchiveStudentButton } from "@/features/students/components/archive-student-button";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
 import { OptionalFeesOptInForm } from "@/features/fees/components/optional-fees-opt-in-form";
@@ -131,6 +136,11 @@ export default async function StudentProfilePage({
       role &&
       DISCIPLINE_RESOLVE_ROLES.includes(role),
   );
+  const canSeeMedical = canViewStudentMedical(role);
+  const canArchive =
+    Boolean(current?.profile?.is_active) &&
+    canManageStudents(role) &&
+    student.status !== "withdrawn";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -148,6 +158,19 @@ export default async function StudentProfilePage({
         <p className="text-muted-foreground font-mono text-sm">
           {student.admissionNumber}
         </p>
+        {canArchive ? (
+          <div className="pt-2">
+            <ArchiveStudentButton
+              studentId={student.id}
+              studentName={student.fullName}
+            />
+          </div>
+        ) : null}
+        {student.status === "withdrawn" && student.archiveReason ? (
+          <p className="text-sm text-muted-foreground">
+            Archive reason: {student.archiveReason}
+          </p>
+        ) : null}
       </div>
 
       <Card>
@@ -201,20 +224,24 @@ export default async function StudentProfilePage({
                     : "No"
               }
             />
-            <Detail
-              label="Vaccinated (smallpox)"
-              value={
-                student.vaccinatedSmallpox === null
-                  ? "-"
-                  : student.vaccinatedSmallpox
-                    ? `Yes${student.vaccinationDate ? ` (${formatDate(student.vaccinationDate)})` : ""}`
-                    : "No"
-              }
-            />
-            <Detail
-              label="Medical notes / allergies"
-              value={student.medicalNotes ?? "-"}
-            />
+            {canSeeMedical ? (
+              <>
+                <Detail
+                  label="Vaccinated (smallpox)"
+                  value={
+                    student.vaccinatedSmallpox === null
+                      ? "-"
+                      : student.vaccinatedSmallpox
+                        ? `Yes${student.vaccinationDate ? ` (${formatDate(student.vaccinationDate)})` : ""}`
+                        : "No"
+                  }
+                />
+                <Detail
+                  label="Medical notes / allergies"
+                  value={student.medicalNotes ?? "-"}
+                />
+              </>
+            ) : null}
           </dl>
         </CardContent>
       </Card>

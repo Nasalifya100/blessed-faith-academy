@@ -72,6 +72,31 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716010100_payment_idempotency.sql` | Payment idempotency key + `record_payment` |
 | `20260716010200_charge_immutability_and_cancel.sql` | Charge immutability + unpaid cancel guard |
 | `20260716010300_charge_unique_indexes.sql` | Unique charge indexes + meal exclusivity |
+| `20260716100000_harden_handle_new_user.sql` | Ignore Auth metadata role (default teacher) |
+| `20260716100100_harden_profiles_rls.sql` | School-scoped profile write policies |
+| `20260716100200_student_medical_privacy.sql` | Medical table + RLS; drop columns from students |
+| `20260716100300_archive_student.sql` | Archive RPC; revoke student DELETE |
+
+### Auth / signup (required)
+
+**Public signup must stay disabled.** Staff accounts are created only by administrators via **Dashboard → Staff** (service-role `createUser`), not by self-registration.
+
+#### Confirm in Supabase Dashboard
+
+1. Open the project → **Authentication** → **Providers** → **Email**.
+2. Ensure **Enable Email Signup** / **Allow new users to sign up** is **OFF** (wording varies by dashboard version).
+3. Under **Authentication** → **URL Configuration**, do not publish a public signup redirect URL for this school app.
+4. Prefer **Confirm email** still enabled for admin-created users if you use email confirmation elsewhere; admin create already sets `email_confirm: true`.
+
+#### App behaviour
+
+- `/login` is sign-in only (no “Create account” flow).
+- `handle_new_user` ignores metadata roles and defaults new profiles to `teacher`; admins set the real role after create.
+- If public signup were ever turned on by mistake, attackers still cannot self-assign `administrator` via metadata, but they could create useless `teacher` accounts — so keep signup off.
+
+#### Quick check
+
+Try opening any public signup URL for the project, or call `supabase.auth.signUp(...)` from a throwaway script with the anon key — it should fail / be rejected when signup is disabled.
 
 ### After a failed or partial apply
 
