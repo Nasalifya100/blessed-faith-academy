@@ -1,16 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { getStudentProfile } from "@/features/students/queries";
+import { getStudentFeeStatement } from "@/features/fees/queries";
 import {
   GENDER_LABELS,
   RELATIONSHIP_LABELS,
 } from "@/features/students/schemas";
 import { StudentStatusBadge } from "@/features/students/components/status-badge";
+import { FeeStatement } from "@/features/fees/components/fee-statement";
+import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -22,6 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const FEE_MANAGER_ROLES = ["administrator", "bursar", "headteacher"];
 
 function formatDate(value: string | null): string {
   if (!value) return "-";
@@ -49,11 +56,20 @@ export default async function StudentProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const student = await getStudentProfile(id);
+  const [student, current, statement] = await Promise.all([
+    getStudentProfile(id),
+    getCurrentUser(),
+    getStudentFeeStatement(id),
+  ]);
 
   if (!student) {
     notFound();
   }
+
+  const canManageFees = Boolean(
+    current?.profile?.role &&
+      FEE_MANAGER_ROLES.includes(current.profile.role),
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -199,6 +215,33 @@ export default async function StudentProfilePage({
               </div>
             ))
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Fees &amp; balance</CardTitle>
+          <CardDescription>
+            Statement for
+            {statement.academicYearName
+              ? ` academic year ${statement.academicYearName}`
+              : " the current academic year"}
+            {statement.currentTermName
+              ? ` · current term: ${statement.currentTermName}`
+              : ""}
+            . Mandatory fees only (tuition + report book, PTA, maintenance).
+            Optional meals and uniforms are added later when opted in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {canManageFees && student.status === "enrolled" ? (
+            <GenerateStudentChargesButton
+              studentId={student.id}
+              termId={statement.currentTermId}
+              termName={statement.currentTermName}
+            />
+          ) : null}
+          <FeeStatement statement={statement} />
         </CardContent>
       </Card>
 

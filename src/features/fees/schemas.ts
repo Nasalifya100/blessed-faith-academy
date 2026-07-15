@@ -38,3 +38,13 @@ export const updateScheduleAmountSchema = z.object({
 export type UpdateScheduleAmountInput = z.infer<
   typeof updateScheduleAmountSchema
 >;
+
+export const generateStudentChargesSchema = z.object({
+  studentId: z.string().uuid(),
+  termId: z.string().uuid().optional(),
+});
+
+export const generateClassChargesSchema = z.object({
+  classId: z.string().uuid(),
+  termId: z.string().uuid().optional(),
+});

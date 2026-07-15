@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { updateScheduleAmountAction } from "@/features/fees/actions";
+import { formatKwacha } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,13 +12,6 @@ interface ScheduleAmountEditorProps {
   scheduleId: string;
   initialAmount: number;
   canEdit: boolean;
-}
-
-function formatKwacha(amount: number): string {
-  return `K${amount.toLocaleString("en-ZM", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
 }
 
 export function ScheduleAmountEditor({

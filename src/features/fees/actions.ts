@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
-import { updateScheduleAmountSchema } from "./schemas";
+import {
+  generateClassChargesSchema,
+  generateStudentChargesSchema,
+  updateScheduleAmountSchema,
+} from "./schemas";
+
 
 export interface ActionResult {
   error: string | null;
@@ -66,4 +71,71 @@ export async function updateScheduleAmountAction(
 
   revalidatePath("/dashboard/fees");
   return { error: null };
+}
+
+export interface GenerateChargesResult {
+  error: string | null;
+  createdCount: number;
+}
+
+export async function generateStudentChargesAction(
+  input: unknown,
+): Promise<GenerateChargesResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error, createdCount: 0 };
+  }
+
+  const parsed = generateStudentChargesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Invalid student.", createdCount: 0 };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("create_charges_for_student", {
+    p_student_id: parsed.data.studentId,
+    p_term_id: parsed.data.termId ?? null,
+  });
+
+  if (error) {
+    return { error: error.message, createdCount: 0 };
+  }
+
+  revalidatePath(`/dashboard/students/${parsed.data.studentId}`);
+  revalidatePath("/dashboard/students");
+  return {
+    error: null,
+    createdCount: typeof data === "number" ? data : Number(data) || 0,
+  };
+}
+
+export async function generateClassChargesAction(
+  input: unknown,
+): Promise<GenerateChargesResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error, createdCount: 0 };
+  }
+
+  const parsed = generateClassChargesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Invalid class.", createdCount: 0 };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("create_charges_for_class", {
+    p_class_id: parsed.data.classId,
+    p_term_id: parsed.data.termId ?? null,
+  });
+
+  if (error) {
+    return { error: error.message, createdCount: 0 };
+  }
+
+  revalidatePath("/dashboard/students");
+  revalidatePath("/dashboard/fees");
+  return {
+    error: null,
+    createdCount: typeof data === "number" ? data : Number(data) || 0,
+  };
 }

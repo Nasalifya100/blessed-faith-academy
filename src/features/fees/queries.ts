@@ -153,3 +153,137 @@ export async function getFeesSetupData(): Promise<FeesSetupData> {
     requirements,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Student fee statement
+// ---------------------------------------------------------------------------
+
+export interface StatementCharge {
+  id: string;
+  description: string;
+  feeItemName: string;
+  amount: number;
+  status: string;
+  termName: string | null;
+  createdAt: string;
+}
+
+export interface StatementPayment {
+  id: string;
+  amount: number;
+  method: string;
+  receiptNumber: string;
+  paidOn: string;
+  status: string;
+}
+
+export interface StudentFeeStatement {
+  academicYearName: string | null;
+  currentTermName: string | null;
+  currentTermId: string | null;
+  charges: StatementCharge[];
+  payments: StatementPayment[];
+  totalCharged: number;
+  totalPaid: number;
+  balance: number;
+}
+
+export async function getStudentFeeStatement(
+  studentId: string,
+): Promise<StudentFeeStatement> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: year } = await supabase
+    .from("academic_years")
+    .select("id, name")
+    .eq("is_current", true)
+    .maybeSingle();
+
+  let currentTermName: string | null = null;
+  let currentTermId: string | null = null;
+
+  if (year?.id) {
+    const { data: term } = await supabase
+      .from("terms")
+      .select("id, name")
+      .eq("academic_year_id", year.id)
+      .eq("is_current", true)
+      .maybeSingle();
+    currentTermName = term?.name ?? null;
+    currentTermId = term?.id ?? null;
+  }
+
+  let charges: StatementCharge[] = [];
+  if (year?.id) {
+    const { data: chargeRows } = await supabase
+      .from("charges")
+      .select(
+        "id, description, amount, status, created_at, fee_item:fee_items(name), term:terms(name)",
+      )
+      .eq("student_id", studentId)
+      .eq("academic_year_id", year.id)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: true });
+
+    charges = (
+      (chargeRows as {
+        id: string;
+        description: string | null;
+        amount: number | string;
+        status: string;
+        created_at: string;
+        fee_item: { name: string } | null;
+        term: { name: string } | null;
+      }[] | null) ?? []
+    ).map((row) => ({
+      id: row.id,
+      description: row.description ?? row.fee_item?.name ?? "Charge",
+      feeItemName: row.fee_item?.name ?? "-",
+      amount: Number(row.amount),
+      status: row.status,
+      termName: row.term?.name ?? null,
+      createdAt: row.created_at,
+    }));
+  }
+
+  const { data: paymentRows } = await supabase
+    .from("payments")
+    .select("id, amount, method, receipt_number, paid_on, status")
+    .eq("student_id", studentId)
+    .eq("status", "completed")
+    .order("paid_on", { ascending: true });
+
+  const payments: StatementPayment[] = (
+    (paymentRows as {
+      id: string;
+      amount: number | string;
+      method: string;
+      receipt_number: string;
+      paid_on: string;
+      status: string;
+    }[] | null) ?? []
+  ).map((row) => ({
+    id: row.id,
+    amount: Number(row.amount),
+    method: row.method,
+    receiptNumber: row.receipt_number,
+    paidOn: row.paid_on,
+    status: row.status,
+  }));
+
+  const totalCharged = charges
+    .filter((charge) => charge.status !== "waived")
+    .reduce((sum, charge) => sum + charge.amount, 0);
+  const totalPaid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
+  return {
+    academicYearName: year?.name ?? null,
+    currentTermName,
+    currentTermId,
+    charges,
+    payments,
+    totalCharged,
+    totalPaid,
+    balance: totalCharged - totalPaid,
+  };
+}
