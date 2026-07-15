@@ -1,6 +1,11 @@
 "use client";
 
-import type { FieldErrors, UseFormRegister } from "react-hook-form";
+import type {
+  FieldErrors,
+  FieldValues,
+  Path,
+  UseFormRegister,
+} from "react-hook-form";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,15 +22,15 @@ export interface StudentExtraFormValues {
   is_zambian_citizen?: boolean;
 }
 
-interface StudentExtraFieldsProps {
-  register: UseFormRegister<StudentExtraFormValues & Record<string, unknown>>;
-  errors: FieldErrors<StudentExtraFormValues>;
+interface StudentExtraFieldsProps<T extends FieldValues & StudentExtraFormValues> {
+  register: UseFormRegister<T>;
+  errors: FieldErrors<T>;
 }
 
-export function StudentExtraFields({
+export function StudentExtraFields<T extends FieldValues & StudentExtraFormValues>({
   register,
   errors,
-}: StudentExtraFieldsProps) {
+}: StudentExtraFieldsProps<T>) {
   return (
     <section className="space-y-4">
       <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
@@ -34,18 +39,24 @@ export function StudentExtraFields({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="place_of_birth">Place of birth</Label>
-          <Input id="place_of_birth" {...register("place_of_birth")} />
+          <Input
+            id="place_of_birth"
+            {...register("place_of_birth" as Path<T>)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="religious_denomination">Religious denomination</Label>
           <Input
             id="religious_denomination"
-            {...register("religious_denomination")}
+            {...register("religious_denomination" as Path<T>)}
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor="previous_school">Present / last school</Label>
-          <Input id="previous_school" {...register("previous_school")} />
+          <Input
+            id="previous_school"
+            {...register("previous_school" as Path<T>)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="proposed_admission_date">
@@ -54,11 +65,11 @@ export function StudentExtraFields({
           <Input
             id="proposed_admission_date"
             type="date"
-            {...register("proposed_admission_date")}
+            {...register("proposed_admission_date" as Path<T>)}
           />
           {errors.proposed_admission_date ? (
             <p className="text-sm text-destructive">
-              {errors.proposed_admission_date.message}
+              {String(errors.proposed_admission_date.message ?? "")}
             </p>
           ) : null}
         </div>
@@ -67,7 +78,7 @@ export function StudentExtraFields({
             <input
               type="checkbox"
               className="size-4 rounded border-input"
-              {...register("is_zambian_citizen")}
+              {...register("is_zambian_citizen" as Path<T>)}
             />
             The child is a Zambian citizen
           </label>
@@ -77,7 +88,7 @@ export function StudentExtraFields({
             <input
               type="checkbox"
               className="size-4 rounded border-input"
-              {...register("vaccinated_smallpox")}
+              {...register("vaccinated_smallpox" as Path<T>)}
             />
             Vaccinated against smallpox
           </label>
@@ -87,11 +98,11 @@ export function StudentExtraFields({
           <Input
             id="vaccination_date"
             type="date"
-            {...register("vaccination_date")}
+            {...register("vaccination_date" as Path<T>)}
           />
           {errors.vaccination_date ? (
             <p className="text-sm text-destructive">
-              {errors.vaccination_date.message}
+              {String(errors.vaccination_date.message ?? "")}
             </p>
           ) : null}
         </div>
@@ -103,7 +114,7 @@ export function StudentExtraFields({
             id="medical_notes"
             rows={3}
             className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            {...register("medical_notes")}
+            {...register("medical_notes" as Path<T>)}
           />
         </div>
       </div>

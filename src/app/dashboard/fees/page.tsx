@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { getFeesSetupData } from "@/features/fees/queries";
+import { getCurrentYearClasses } from "@/features/students/queries";
 import {
   BILLING_FREQUENCY_LABELS,
   FEE_CATEGORIES,
@@ -9,6 +10,7 @@ import {
   REQUIREMENT_BAND_LABELS,
 } from "@/features/fees/schemas";
 import { ScheduleAmountEditor } from "@/features/fees/components/schedule-amount-editor";
+import { GenerateClassChargesPanel } from "@/features/fees/components/generate-class-charges-panel";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -43,7 +45,8 @@ export default async function FeesPage() {
   }
 
   const canEdit = FEE_MANAGER_ROLES.includes(role);
-  const { academicYearName, items, requirements } = await getFeesSetupData();
+  const [{ academicYearName, currentTermId, currentTermName, items, requirements }, yearClasses] =
+    await Promise.all([getFeesSetupData(), getCurrentYearClasses()]);
 
   const requirementsByBand = new Map<string, typeof requirements>();
   for (const item of requirements) {
@@ -64,6 +67,25 @@ export default async function FeesPage() {
             : ". View only — contact an administrator or bursar to change amounts or record payments."}
         </p>
       </div>
+
+      {canEdit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Generate class charges</CardTitle>
+            <CardDescription>
+              Apply mandatory fees for every enrolled pupil in a class for the
+              current term.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <GenerateClassChargesPanel
+              classes={yearClasses.classes}
+              termId={currentTermId}
+              termName={currentTermName}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {FEE_CATEGORIES.map((category) => {
         const categoryItems = items.filter((item) => item.category === category);

@@ -32,6 +32,8 @@ export interface RequirementItemRow {
 
 export interface FeesSetupData {
   academicYearName: string | null;
+  currentTermId: string | null;
+  currentTermName: string | null;
   items: FeeItemWithSchedules[];
   requirements: RequirementItemRow[];
 }
@@ -148,8 +150,23 @@ export async function getFeesSetupData(): Promise<FeesSetupData> {
     sortOrder: row.sort_order,
   }));
 
+  let currentTermId: string | null = null;
+  let currentTermName: string | null = null;
+  if (year?.id) {
+    const { data: term } = await supabase
+      .from("terms")
+      .select("id, name")
+      .eq("academic_year_id", year.id)
+      .eq("is_current", true)
+      .maybeSingle();
+    currentTermId = term?.id ?? null;
+    currentTermName = term?.name ?? null;
+  }
+
   return {
     academicYearName: year?.name ?? null,
+    currentTermId,
+    currentTermName,
     items,
     requirements,
   };

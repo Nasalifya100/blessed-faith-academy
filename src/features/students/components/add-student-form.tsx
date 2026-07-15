@@ -241,8 +241,7 @@ export function AddStudentForm({
         </div>
       </section>
 
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <StudentExtraFields register={register as any} errors={errors} />
+      <StudentExtraFields register={register} errors={errors} />
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
@@ -270,8 +269,7 @@ export function AddStudentForm({
             <GuardianFields
               key={field.id}
               index={index}
-              /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-              register={register as any}
+              register={register}
               errors={errors}
               isPrimary={Boolean(watchedGuardians?.[index]?.is_primary_contact)}
               canRemove={fields.length > 1}

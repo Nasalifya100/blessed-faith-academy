@@ -2,7 +2,11 @@
 
 import type {
   FieldErrors,
+  FieldValues,
+  Path,
+  UseFormGetValues,
   UseFormRegister,
+  UseFormSetValue,
 } from "react-hook-form";
 
 import {
@@ -15,17 +19,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
 
-interface GuardianFieldsProps {
+type WithGuardians = FieldValues & { guardians: GuardianInput[] };
+
+interface GuardianFieldsProps<T extends WithGuardians> {
   index: number;
-  register: UseFormRegister<{ guardians: GuardianInput[] } & Record<string, unknown>>;
-  errors: FieldErrors<{ guardians: GuardianInput[] }>;
+  register: UseFormRegister<T>;
+  errors: FieldErrors<T>;
   isPrimary: boolean;
   canRemove: boolean;
   onMakePrimary: () => void;
   onRemove: () => void;
 }
 
-export function GuardianFields({
+export function GuardianFields<T extends WithGuardians>({
   index,
   register,
   errors,
@@ -33,8 +39,10 @@ export function GuardianFields({
   canRemove,
   onMakePrimary,
   onRemove,
-}: GuardianFieldsProps) {
-  const fieldErrors = errors.guardians?.[index];
+}: GuardianFieldsProps<T>) {
+  const fieldErrors = (
+    errors.guardians as FieldErrors<GuardianInput>[] | undefined
+  )?.[index];
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
@@ -53,7 +61,7 @@ export function GuardianFields({
           <Input
             id={`g-${index}-first`}
             aria-invalid={Boolean(fieldErrors?.first_name)}
-            {...register(`guardians.${index}.first_name`)}
+            {...register(`guardians.${index}.first_name` as Path<T>)}
           />
           {fieldErrors?.first_name ? (
             <p className="text-sm text-destructive">
@@ -67,7 +75,7 @@ export function GuardianFields({
           <Input
             id={`g-${index}-last`}
             aria-invalid={Boolean(fieldErrors?.last_name)}
-            {...register(`guardians.${index}.last_name`)}
+            {...register(`guardians.${index}.last_name` as Path<T>)}
           />
           {fieldErrors?.last_name ? (
             <p className="text-sm text-destructive">
@@ -80,7 +88,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-rel`}>Relationship</Label>
           <SelectNative
             id={`g-${index}-rel`}
-            {...register(`guardians.${index}.relationship`)}
+            {...register(`guardians.${index}.relationship` as Path<T>)}
           >
             {GUARDIAN_RELATIONSHIPS.map((value) => (
               <option key={value} value={value}>
@@ -94,7 +102,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-phone`}>Phone number</Label>
           <Input
             id={`g-${index}-phone`}
-            {...register(`guardians.${index}.phone`)}
+            {...register(`guardians.${index}.phone` as Path<T>)}
           />
         </div>
 
@@ -102,7 +110,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-whatsapp`}>WhatsApp</Label>
           <Input
             id={`g-${index}-whatsapp`}
-            {...register(`guardians.${index}.whatsapp`)}
+            {...register(`guardians.${index}.whatsapp` as Path<T>)}
           />
         </div>
 
@@ -110,7 +118,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-alt`}>Alternate phone</Label>
           <Input
             id={`g-${index}-alt`}
-            {...register(`guardians.${index}.alt_phone`)}
+            {...register(`guardians.${index}.alt_phone` as Path<T>)}
           />
         </div>
 
@@ -120,7 +128,7 @@ export function GuardianFields({
             id={`g-${index}-email`}
             type="email"
             aria-invalid={Boolean(fieldErrors?.email)}
-            {...register(`guardians.${index}.email`)}
+            {...register(`guardians.${index}.email` as Path<T>)}
           />
           {fieldErrors?.email ? (
             <p className="text-sm text-destructive">
@@ -133,7 +141,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-nrc`}>NRC / national ID</Label>
           <Input
             id={`g-${index}-nrc`}
-            {...register(`guardians.${index}.national_id`)}
+            {...register(`guardians.${index}.national_id` as Path<T>)}
           />
         </div>
 
@@ -141,7 +149,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-occ`}>Occupation</Label>
           <Input
             id={`g-${index}-occ`}
-            {...register(`guardians.${index}.occupation`)}
+            {...register(`guardians.${index}.occupation` as Path<T>)}
           />
         </div>
 
@@ -149,7 +157,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-addr`}>Residential address</Label>
           <Input
             id={`g-${index}-addr`}
-            {...register(`guardians.${index}.address`)}
+            {...register(`guardians.${index}.address` as Path<T>)}
           />
         </div>
 
@@ -157,7 +165,7 @@ export function GuardianFields({
           <Label htmlFor={`g-${index}-postal`}>Postal address</Label>
           <Input
             id={`g-${index}-postal`}
-            {...register(`guardians.${index}.postal_address`)}
+            {...register(`guardians.${index}.postal_address` as Path<T>)}
           />
         </div>
       </div>
@@ -176,7 +184,7 @@ export function GuardianFields({
           <input
             type="checkbox"
             className="size-4 rounded border-input"
-            {...register(`guardians.${index}.is_emergency_contact`)}
+            {...register(`guardians.${index}.is_emergency_contact` as Path<T>)}
           />
           Emergency contact
         </label>
@@ -185,17 +193,17 @@ export function GuardianFields({
   );
 }
 
-export function makePrimaryHelper(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getValues: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue: any,
+export function makePrimaryHelper<T extends WithGuardians>(
+  getValues: UseFormGetValues<T>,
+  setValue: UseFormSetValue<T>,
   index: number,
 ) {
-  const guardians = getValues("guardians") as GuardianInput[];
+  const guardians = getValues("guardians" as Path<T>) as GuardianInput[];
   guardians.forEach((_, i) => {
-    setValue(`guardians.${i}.is_primary_contact`, i === index, {
-      shouldValidate: true,
-    });
+    setValue(
+      `guardians.${i}.is_primary_contact` as Path<T>,
+      (i === index) as T[Path<T>],
+      { shouldValidate: true },
+    );
   });
 }

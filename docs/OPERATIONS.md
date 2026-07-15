@@ -82,6 +82,7 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716120100_attendance_audit_and_soft_delete.sql` | Attendance correction audit; revoke hard DELETE on attendance/rules/incidents |
 | `20260716130000_overpayment_and_school_scoped_select.sql` | Cap payments at balance; school-scope config SELECT |
 | `20260716130100_reuse_guardians.sql` | Match/link guardians by NRC or phone on enrol/apply |
+| `20260716140000_attendance_uniqueness_and_cover_overlap.sql` | One mark per student/day; no overlapping covers |
 
 ### Auth / signup (required)
 
