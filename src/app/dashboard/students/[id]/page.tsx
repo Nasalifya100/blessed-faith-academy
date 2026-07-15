@@ -6,7 +6,7 @@ import {
   canManageStudents,
   canViewStudentMedical,
 } from "@/features/auth/permissions";
-import { getStudentProfile } from "@/features/students/queries";
+import { getStudentProfile, getCurrentYearClasses } from "@/features/students/queries";
 import {
   getOptionalFeeOptions,
   getStudentFeeStatement,
@@ -23,6 +23,7 @@ import {
 } from "@/features/students/schemas";
 import { StudentStatusBadge } from "@/features/students/components/status-badge";
 import { ArchiveStudentButton } from "@/features/students/components/archive-student-button";
+import { TransferStudentClassForm } from "@/features/students/components/transfer-student-class-form";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
 import { OptionalFeesOptInForm } from "@/features/fees/components/optional-fees-opt-in-form";
@@ -102,6 +103,7 @@ export default async function StudentProfilePage({
     attendance,
     incidents,
     rules,
+    yearClasses,
   ] = await Promise.all([
     getStudentProfile(id),
     getCurrentUser(),
@@ -111,6 +113,7 @@ export default async function StudentProfilePage({
     getStudentAttendanceHistory(id),
     listStudentDisciplineIncidents(id),
     listSchoolRules({ activeOnly: true }),
+    getCurrentYearClasses(),
   ]);
 
   if (!student) {
@@ -141,6 +144,12 @@ export default async function StudentProfilePage({
     Boolean(current?.profile?.is_active) &&
     canManageStudents(role) &&
     student.status !== "withdrawn";
+  const canTransfer =
+    Boolean(current?.profile?.is_active) &&
+    canManageStudents(role) &&
+    student.status === "enrolled" &&
+    Boolean(student.currentClassId) &&
+    yearClasses.classes.length > 1;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -158,12 +167,22 @@ export default async function StudentProfilePage({
         <p className="text-muted-foreground font-mono text-sm">
           {student.admissionNumber}
         </p>
-        {canArchive ? (
-          <div className="pt-2">
-            <ArchiveStudentButton
-              studentId={student.id}
-              studentName={student.fullName}
-            />
+        {canArchive || canTransfer ? (
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
+            {canTransfer ? (
+              <TransferStudentClassForm
+                studentId={student.id}
+                studentName={student.fullName}
+                currentClassId={student.currentClassId}
+                classes={yearClasses.classes}
+              />
+            ) : null}
+            {canArchive ? (
+              <ArchiveStudentButton
+                studentId={student.id}
+                studentName={student.fullName}
+              />
+            ) : null}
           </div>
         ) : null}
         {student.status === "withdrawn" && student.archiveReason ? (

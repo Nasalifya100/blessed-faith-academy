@@ -13,13 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
+import { schoolToday } from "@/lib/dates";
 
 interface RecordDisciplineIncidentFormProps {
   studentId: string;
   rules: SchoolRuleRow[];
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => schoolToday();
 
 export function RecordDisciplineIncidentForm({
   studentId,

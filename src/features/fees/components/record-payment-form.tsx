@@ -13,6 +13,7 @@ import {
 } from "@/features/fees/schemas";
 import { recordPaymentAction } from "@/features/fees/actions";
 import { formatKwacha } from "@/lib/money";
+import { schoolToday } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,7 @@ interface RecordPaymentFormProps {
   currentBalance: number;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => schoolToday();
 
 export function RecordPaymentForm({
   studentId,

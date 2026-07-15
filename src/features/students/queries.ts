@@ -159,7 +159,8 @@ export async function listStudents(
     let enrolQuery = supabase
       .from("student_class_enrollments")
       .select("student_id, class:classes(name, grade_level:grade_levels(name))")
-      .eq("academic_year_id", year.id);
+      .eq("academic_year_id", year.id)
+      .eq("status", "active");
 
     if (filters.classId) {
       enrolQuery = enrolQuery.eq("class_id", filters.classId);
@@ -214,6 +215,7 @@ export interface StudentGuardianView {
 
 export interface StudentEnrolmentView {
   id: string;
+  classId: string;
   className: string;
   academicYearName: string;
   status: string;
@@ -242,6 +244,7 @@ export interface StudentProfile {
   isZambianCitizen: boolean | null;
   archivedAt: string | null;
   archiveReason: string | null;
+  currentClassId: string | null;
   currentClassName: string | null;
   guardians: StudentGuardianView[];
   enrolments: StudentEnrolmentView[];
@@ -270,6 +273,7 @@ interface EnrolmentJoinRow {
   id: string;
   status: string;
   enrolled_on: string;
+  class_id: string;
   class: { name: string; grade_level: { name: string } | null } | null;
   academic_year: { name: string; is_current: boolean } | null;
 }
@@ -307,7 +311,7 @@ export async function getStudentProfile(
   const { data: enrolmentRows } = await supabase
     .from("student_class_enrollments")
     .select(
-      "id, status, enrolled_on, class:classes(name, grade_level:grade_levels(name)), academic_year:academic_years(name, is_current)",
+      "id, class_id, status, enrolled_on, class:classes(name, grade_level:grade_levels(name)), academic_year:academic_years(name, is_current)",
     )
     .eq("student_id", id)
     .order("enrolled_on", { ascending: false });
@@ -338,6 +342,7 @@ export async function getStudentProfile(
     (enrolmentRows as EnrolmentJoinRow[] | null) ?? []
   ).map((row) => ({
     id: row.id,
+    classId: row.class_id,
     className: row.class?.grade_level?.name ?? row.class?.name ?? "-",
     academicYearName: row.academic_year?.name ?? "-",
     status: row.status,
@@ -345,8 +350,11 @@ export async function getStudentProfile(
     isCurrent: Boolean(row.academic_year?.is_current),
   }));
 
-  const currentClassName =
-    enrolments.find((enrolment) => enrolment.isCurrent)?.className ?? null;
+  const activeCurrent = enrolments.find(
+    (enrolment) => enrolment.isCurrent && enrolment.status === "active",
+  );
+  const currentClassId = activeCurrent?.classId ?? null;
+  const currentClassName = activeCurrent?.className ?? null;
 
   const student_ = student as {
     id: string;
@@ -396,6 +404,7 @@ export async function getStudentProfile(
     isZambianCitizen: student_.is_zambian_citizen,
     archivedAt: student_.archived_at,
     archiveReason: student_.archive_reason,
+    currentClassId,
     currentClassName,
     guardians,
     enrolments,

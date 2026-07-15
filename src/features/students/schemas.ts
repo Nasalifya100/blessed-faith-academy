@@ -180,3 +180,12 @@ export const archiveStudentSchema = z.object({
 });
 
 export type ArchiveStudentInput = z.infer<typeof archiveStudentSchema>;
+
+export const transferStudentClassSchema = z.object({
+  studentId: z.string().uuid(),
+  newClassId: z.string().uuid("Please choose a class"),
+});
+
+export type TransferStudentClassInput = z.infer<
+  typeof transferStudentClassSchema
+>;

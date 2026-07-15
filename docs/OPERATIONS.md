@@ -77,6 +77,7 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716100200_student_medical_privacy.sql` | Medical table + RLS; drop columns from students |
 | `20260716100300_archive_student.sql` | Archive RPC; revoke student DELETE |
 | `20260716110000_application_review_guards.sql` | Approve/reject validation (consent, guardians, reason) |
+| `20260716110100_transfer_student_class.sql` | Mid-year class transfer + one active enrolment per year |
 
 ### Auth / signup (required)
 

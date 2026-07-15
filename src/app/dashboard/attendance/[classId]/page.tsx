@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { schoolToday } from "@/lib/dates";
 
 const ATTENDANCE_ROLES = [
   "administrator",
@@ -47,7 +48,7 @@ export default async function ClassAttendancePage({
   const attendanceDate =
     dateParam && !Number.isNaN(Date.parse(dateParam))
       ? dateParam.slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
+      : schoolToday();
 
   const { items: allowed } = await listClassesForAttendance();
   if (!allowed.some((cls) => cls.id === classId)) {

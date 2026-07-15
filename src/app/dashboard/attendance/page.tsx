@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { schoolToday } from "@/lib/dates";
 
 const ATTENDANCE_ROLES = [
   "administrator",
@@ -45,7 +46,7 @@ export default async function AttendancePage() {
   const canManageCovers = COVER_MANAGER_ROLES.includes(role);
   const { items: classes, error: classesError } =
     await listClassesForAttendance();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = schoolToday();
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
