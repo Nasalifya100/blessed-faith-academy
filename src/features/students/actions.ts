@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
-import { createStudentSchema } from "./schemas";
+import { createStudentSchema, mapGuardianPayload } from "./schemas";
 
 export interface CreateStudentResult {
   error: string | null;
@@ -17,7 +17,14 @@ const CONNECTION_ERROR =
   "Couldn't reach the server to verify your account. Check your internet connection and try again.";
 const SESSION_ERROR = "Your session has expired. Please sign in again.";
 
-async function assertStudentManager(): Promise<{ ok: true } | { ok: false; error: string }> {
+function emptyToNull(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+async function assertStudentManager(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
   const current = await getCurrentUser();
   if (!current) {
     return { ok: false, error: SESSION_ERROR };
@@ -50,7 +57,9 @@ export async function createStudentAction(
   const parsed = createStudentSchema.safeParse(input);
   if (!parsed.success) {
     return {
-      error: parsed.error.issues[0]?.message ?? "Please check the form and try again.",
+      error:
+        parsed.error.issues[0]?.message ??
+        "Please check the form and try again.",
       studentId: null,
       nextAdmissionNumber: null,
     };
@@ -70,24 +79,22 @@ export async function createStudentAction(
       p_gender: data.gender,
       p_enrollment_date: data.enrollment_date,
       p_class_id: data.class_id,
-      p_guardians: data.guardians.map((guardian) => ({
-        first_name: guardian.first_name.trim(),
-        last_name: guardian.last_name.trim(),
-        relationship: guardian.relationship,
-        phone: guardian.phone ?? "",
-        alt_phone: guardian.alt_phone ?? "",
-        email: guardian.email ?? "",
-        national_id: guardian.national_id ?? "",
-        occupation: guardian.occupation ?? "",
-        address: guardian.address ?? "",
-        is_primary_contact: guardian.is_primary_contact,
-        is_emergency_contact: guardian.is_emergency_contact,
-      })),
+      p_place_of_birth: emptyToNull(data.place_of_birth),
+      p_religious_denomination: emptyToNull(data.religious_denomination),
+      p_previous_school: emptyToNull(data.previous_school),
+      p_proposed_admission_date: emptyToNull(data.proposed_admission_date),
+      p_vaccinated_smallpox: data.vaccinated_smallpox ?? null,
+      p_vaccination_date: emptyToNull(data.vaccination_date),
+      p_medical_notes: emptyToNull(data.medical_notes),
+      p_is_zambian_citizen: data.is_zambian_citizen ?? null,
+      p_guardians: data.guardians.map(mapGuardianPayload),
     },
   );
 
   if (error) {
-    const message = error.message.includes("students_school_id_admission_number_key")
+    const message = error.message.includes(
+      "students_school_id_admission_number_key",
+    )
       ? "That admission number is already in use. Please use a different one."
       : error.message;
     return { error: message, studentId: null, nextAdmissionNumber: null };

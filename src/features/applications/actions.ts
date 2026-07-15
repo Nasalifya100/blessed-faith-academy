@@ -4,11 +4,17 @@ import { revalidatePath } from "next/cache";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { mapGuardianPayload } from "@/features/students/schemas";
 import {
   approveApplicationSchema,
   createApplicationSchema,
   rejectApplicationSchema,
 } from "./schemas";
+
+function emptyToNull(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
 
 const CONNECTION_ERROR =
   "Couldn't reach the server to verify your account. Check your internet connection and try again.";
@@ -77,19 +83,17 @@ export async function createApplicationAction(
       p_consent_agreed: data.consent_agreed,
       p_consent_signed_by: data.consent_signed_by.trim(),
       p_consent_signed_at: data.consent_signed_at,
-      p_guardians: data.guardians.map((guardian) => ({
-        first_name: guardian.first_name.trim(),
-        last_name: guardian.last_name.trim(),
-        relationship: guardian.relationship,
-        phone: guardian.phone ?? "",
-        alt_phone: guardian.alt_phone ?? "",
-        email: guardian.email ?? "",
-        national_id: guardian.national_id ?? "",
-        occupation: guardian.occupation ?? "",
-        address: guardian.address ?? "",
-        is_primary_contact: guardian.is_primary_contact,
-        is_emergency_contact: guardian.is_emergency_contact,
-      })),
+      p_place_of_birth: emptyToNull(data.place_of_birth),
+      p_religious_denomination: emptyToNull(data.religious_denomination),
+      p_previous_school: emptyToNull(data.previous_school),
+      p_proposed_admission_date: emptyToNull(data.proposed_admission_date),
+      p_vaccinated_smallpox: data.vaccinated_smallpox ?? null,
+      p_vaccination_date: emptyToNull(data.vaccination_date),
+      p_medical_notes: emptyToNull(data.medical_notes),
+      p_is_zambian_citizen: data.is_zambian_citizen ?? null,
+      p_emergency_contact_phone: data.emergency_contact_phone.trim(),
+      p_media_release_agreed: data.media_release_agreed,
+      p_guardians: data.guardians.map(mapGuardianPayload),
     },
   );
 

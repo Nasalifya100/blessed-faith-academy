@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { guardianSchema, GENDERS } from "@/features/students/schemas";
+import {
+  guardianSchema,
+  GENDERS,
+  studentExtraFieldsSchema,
+} from "@/features/students/schemas";
 
 const dateString = (label: string) =>
   z
@@ -49,10 +53,15 @@ export const createApplicationSchema = z
       .string()
       .min(1, "Enter the name of the parent/guardian who agreed"),
     consent_signed_at: dateString("Declaration date"),
+    emergency_contact_phone: z
+      .string()
+      .min(1, "Enter an emergency contact phone number"),
+    media_release_agreed: z.boolean(),
     guardians: z
       .array(guardianSchema)
       .min(1, "Add at least one parent or guardian"),
   })
+  .merge(studentExtraFieldsSchema)
   .refine(
     (data) =>
       data.guardians.filter((guardian) => guardian.is_primary_contact)

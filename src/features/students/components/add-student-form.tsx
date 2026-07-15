@@ -8,13 +8,17 @@ import { useRouter } from "next/navigation";
 import {
   createStudentSchema,
   type CreateStudentInput,
+  emptyGuardian,
   GENDERS,
   GENDER_LABELS,
-  GUARDIAN_RELATIONSHIPS,
-  RELATIONSHIP_LABELS,
 } from "@/features/students/schemas";
 import { createStudentAction } from "@/features/students/actions";
 import type { ClassOption } from "@/features/students/queries";
+import { StudentExtraFields } from "@/features/students/components/student-extra-fields";
+import {
+  GuardianFields,
+  makePrimaryHelper,
+} from "@/features/students/components/guardian-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,22 +30,6 @@ interface AddStudentFormProps {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-
-function emptyGuardian(isPrimary: boolean): CreateStudentInput["guardians"][number] {
-  return {
-    first_name: "",
-    last_name: "",
-    relationship: "mother",
-    phone: "",
-    alt_phone: "",
-    email: "",
-    national_id: "",
-    occupation: "",
-    address: "",
-    is_primary_contact: isPrimary,
-    is_emergency_contact: false,
-  };
-}
 
 export function AddStudentForm({
   classes,
@@ -70,6 +58,14 @@ export function AddStudentForm({
       gender: "male",
       enrollment_date: today(),
       class_id: classes[0]?.id ?? "",
+      place_of_birth: "",
+      religious_denomination: "",
+      previous_school: "",
+      proposed_admission_date: "",
+      vaccinated_smallpox: false,
+      vaccination_date: "",
+      medical_notes: "",
+      is_zambian_citizen: true,
       guardians: [emptyGuardian(true)],
     },
   });
@@ -80,15 +76,6 @@ export function AddStudentForm({
   });
 
   const watchedGuardians = useWatch({ control, name: "guardians" });
-
-  function makePrimary(index: number) {
-    const guardians = getValues("guardians");
-    guardians.forEach((_, i) => {
-      setValue(`guardians.${i}.is_primary_contact`, i === index, {
-        shouldValidate: true,
-      });
-    });
-  }
 
   async function onSubmit(values: CreateStudentInput) {
     setServerError(null);
@@ -112,6 +99,14 @@ export function AddStudentForm({
       gender: "male",
       enrollment_date: today(),
       class_id: values.class_id,
+      place_of_birth: "",
+      religious_denomination: "",
+      previous_school: "",
+      proposed_admission_date: "",
+      vaccinated_smallpox: false,
+      vaccination_date: "",
+      medical_notes: "",
+      is_zambian_citizen: true,
       guardians: [emptyGuardian(true)],
     });
     router.refresh();
@@ -133,7 +128,7 @@ export function AddStudentForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8" noValidate>
       <section className="space-y-4">
-        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+        <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           Student details
         </h3>
 
@@ -244,9 +239,12 @@ export function AddStudentForm({
         </div>
       </section>
 
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <StudentExtraFields register={register as any} errors={errors} />
+
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
             Parents / guardians
           </h3>
           <Button
@@ -267,140 +265,19 @@ export function AddStudentForm({
 
         <div className="space-y-6">
           {fields.map((field, index) => (
-            <div key={field.id} className="space-y-4 rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Guardian {index + 1}</p>
-                {fields.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => remove(index)}
-                  >
-                    Remove
-                  </Button>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-first`}>First name</Label>
-                  <Input
-                    id={`g-${index}-first`}
-                    aria-invalid={Boolean(errors.guardians?.[index]?.first_name)}
-                    {...register(`guardians.${index}.first_name`)}
-                  />
-                  {errors.guardians?.[index]?.first_name ? (
-                    <p className="text-sm text-destructive">
-                      {errors.guardians[index]?.first_name?.message}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-last`}>Last name</Label>
-                  <Input
-                    id={`g-${index}-last`}
-                    aria-invalid={Boolean(errors.guardians?.[index]?.last_name)}
-                    {...register(`guardians.${index}.last_name`)}
-                  />
-                  {errors.guardians?.[index]?.last_name ? (
-                    <p className="text-sm text-destructive">
-                      {errors.guardians[index]?.last_name?.message}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-rel`}>Relationship</Label>
-                  <SelectNative
-                    id={`g-${index}-rel`}
-                    {...register(`guardians.${index}.relationship`)}
-                  >
-                    {GUARDIAN_RELATIONSHIPS.map((value) => (
-                      <option key={value} value={value}>
-                        {RELATIONSHIP_LABELS[value]}
-                      </option>
-                    ))}
-                  </SelectNative>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-phone`}>Phone</Label>
-                  <Input
-                    id={`g-${index}-phone`}
-                    {...register(`guardians.${index}.phone`)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-alt`}>Alternate phone</Label>
-                  <Input
-                    id={`g-${index}-alt`}
-                    {...register(`guardians.${index}.alt_phone`)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-email`}>Email</Label>
-                  <Input
-                    id={`g-${index}-email`}
-                    type="email"
-                    aria-invalid={Boolean(errors.guardians?.[index]?.email)}
-                    {...register(`guardians.${index}.email`)}
-                  />
-                  {errors.guardians?.[index]?.email ? (
-                    <p className="text-sm text-destructive">
-                      {errors.guardians[index]?.email?.message}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-nrc`}>NRC / national ID</Label>
-                  <Input
-                    id={`g-${index}-nrc`}
-                    {...register(`guardians.${index}.national_id`)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-occ`}>Occupation</Label>
-                  <Input
-                    id={`g-${index}-occ`}
-                    {...register(`guardians.${index}.occupation`)}
-                  />
-                </div>
-
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor={`g-${index}-addr`}>Address</Label>
-                  <Input
-                    id={`g-${index}-addr`}
-                    {...register(`guardians.${index}.address`)}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-6">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4 rounded border-input"
-                    checked={Boolean(watchedGuardians?.[index]?.is_primary_contact)}
-                    onChange={() => makePrimary(index)}
-                  />
-                  Primary contact
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4 rounded border-input"
-                    {...register(`guardians.${index}.is_emergency_contact`)}
-                  />
-                  Emergency contact
-                </label>
-              </div>
-            </div>
+            <GuardianFields
+              key={field.id}
+              index={index}
+              /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+              register={register as any}
+              errors={errors}
+              isPrimary={Boolean(watchedGuardians?.[index]?.is_primary_contact)}
+              canRemove={fields.length > 1}
+              onMakePrimary={() =>
+                makePrimaryHelper(getValues, setValue, index)
+              }
+              onRemove={() => remove(index)}
+            />
           ))}
         </div>
       </section>

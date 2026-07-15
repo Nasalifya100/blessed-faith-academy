@@ -62,6 +62,7 @@ export interface ApplicationGuardianView {
   fullName: string;
   relationship: string;
   phone: string | null;
+  whatsapp: string | null;
   email: string | null;
   isPrimary: boolean;
   isEmergency: boolean;
@@ -76,6 +77,8 @@ export interface ApplicationDetail {
   consentAgreed: boolean;
   consentSignedBy: string | null;
   consentSignedAt: string | null;
+  emergencyContactPhone: string | null;
+  mediaReleaseAgreed: boolean;
   submittedByName: string | null;
   reviewedByName: string | null;
   student: {
@@ -85,6 +88,14 @@ export interface ApplicationDetail {
     dateOfBirth: string;
     gender: string;
     status: string;
+    placeOfBirth: string | null;
+    religiousDenomination: string | null;
+    previousSchool: string | null;
+    proposedAdmissionDate: string | null;
+    vaccinatedSmallpox: boolean | null;
+    vaccinationDate: string | null;
+    medicalNotes: string | null;
+    isZambianCitizen: boolean | null;
   } | null;
   appliedClass: { id: string; name: string } | null;
   guardians: ApplicationGuardianView[];
@@ -99,6 +110,8 @@ interface ApplicationDetailRow {
   consent_agreed: boolean;
   consent_signed_by: string | null;
   consent_signed_at: string | null;
+  emergency_contact_phone: string | null;
+  media_release_agreed: boolean;
   submitted_by: string | null;
   reviewed_by: string | null;
   student: {
@@ -110,6 +123,14 @@ interface ApplicationDetailRow {
     date_of_birth: string;
     gender: string;
     status: string;
+    place_of_birth: string | null;
+    religious_denomination: string | null;
+    previous_school: string | null;
+    proposed_admission_date: string | null;
+    vaccinated_smallpox: boolean | null;
+    vaccination_date: string | null;
+    medical_notes: string | null;
+    is_zambian_citizen: boolean | null;
   } | null;
   applied_class: {
     id: string;
@@ -127,6 +148,7 @@ interface GuardianJoinRow {
     first_name: string;
     last_name: string;
     phone: string | null;
+    whatsapp: string | null;
     email: string | null;
   } | null;
 }
@@ -139,7 +161,7 @@ export async function getApplicationDetail(
   const { data: row } = await supabase
     .from("applications")
     .select(
-      "id, status, submitted_at, reviewed_at, decision_notes, consent_agreed, consent_signed_by, consent_signed_at, submitted_by, reviewed_by, student:students(id, first_name, middle_name, last_name, admission_number, date_of_birth, gender, status), applied_class:classes(id, name, grade_level:grade_levels(name))",
+      "id, status, submitted_at, reviewed_at, decision_notes, consent_agreed, consent_signed_by, consent_signed_at, emergency_contact_phone, media_release_agreed, submitted_by, reviewed_by, student:students(id, first_name, middle_name, last_name, admission_number, date_of_birth, gender, status, place_of_birth, religious_denomination, previous_school, proposed_admission_date, vaccinated_smallpox, vaccination_date, medical_notes, is_zambian_citizen), applied_class:classes(id, name, grade_level:grade_levels(name))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -153,7 +175,7 @@ export async function getApplicationDetail(
   const { data: guardianRows } = await supabase
     .from("student_guardians")
     .select(
-      "id, relationship, is_primary_contact, is_emergency_contact, guardian:guardians(first_name, last_name, phone, email)",
+      "id, relationship, is_primary_contact, is_emergency_contact, guardian:guardians(first_name, last_name, phone, whatsapp, email)",
     )
     .eq("student_id", application.student?.id ?? "");
 
@@ -187,6 +209,7 @@ export async function getApplicationDetail(
         .join(" "),
       relationship: guardianRow.relationship,
       phone: guardianRow.guardian?.phone ?? null,
+      whatsapp: guardianRow.guardian?.whatsapp ?? null,
       email: guardianRow.guardian?.email ?? null,
       isPrimary: guardianRow.is_primary_contact,
       isEmergency: guardianRow.is_emergency_contact,
@@ -202,6 +225,8 @@ export async function getApplicationDetail(
     consentAgreed: application.consent_agreed,
     consentSignedBy: application.consent_signed_by,
     consentSignedAt: application.consent_signed_at,
+    emergencyContactPhone: application.emergency_contact_phone,
+    mediaReleaseAgreed: application.media_release_agreed,
     submittedByName: application.submitted_by
       ? (nameById.get(application.submitted_by) ?? null)
       : null,
@@ -222,6 +247,14 @@ export async function getApplicationDetail(
           dateOfBirth: application.student.date_of_birth,
           gender: application.student.gender,
           status: application.student.status,
+          placeOfBirth: application.student.place_of_birth,
+          religiousDenomination: application.student.religious_denomination,
+          previousSchool: application.student.previous_school,
+          proposedAdmissionDate: application.student.proposed_admission_date,
+          vaccinatedSmallpox: application.student.vaccinated_smallpox,
+          vaccinationDate: application.student.vaccination_date,
+          medicalNotes: application.student.medical_notes,
+          isZambianCitizen: application.student.is_zambian_citizen,
         }
       : null,
     appliedClass: application.applied_class

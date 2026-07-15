@@ -202,10 +202,12 @@ export interface StudentGuardianView {
   relationship: string;
   phone: string | null;
   altPhone: string | null;
+  whatsapp: string | null;
   email: string | null;
   nationalId: string | null;
   occupation: string | null;
   address: string | null;
+  postalAddress: string | null;
   isPrimary: boolean;
   isEmergency: boolean;
 }
@@ -230,6 +232,14 @@ export interface StudentProfile {
   gender: string;
   status: string;
   enrollmentDate: string;
+  placeOfBirth: string | null;
+  religiousDenomination: string | null;
+  previousSchool: string | null;
+  proposedAdmissionDate: string | null;
+  vaccinatedSmallpox: boolean | null;
+  vaccinationDate: string | null;
+  medicalNotes: string | null;
+  isZambianCitizen: boolean | null;
   currentClassName: string | null;
   guardians: StudentGuardianView[];
   enrolments: StudentEnrolmentView[];
@@ -245,10 +255,12 @@ interface GuardianJoinRow {
     last_name: string;
     phone: string | null;
     alt_phone: string | null;
+    whatsapp: string | null;
     email: string | null;
     national_id: string | null;
     occupation: string | null;
     address: string | null;
+    postal_address: string | null;
   } | null;
 }
 
@@ -268,7 +280,7 @@ export async function getStudentProfile(
   const { data: student } = await supabase
     .from("students")
     .select(
-      "id, admission_number, first_name, middle_name, last_name, date_of_birth, gender, status, enrollment_date",
+      "id, admission_number, first_name, middle_name, last_name, date_of_birth, gender, status, enrollment_date, place_of_birth, religious_denomination, previous_school, proposed_admission_date, vaccinated_smallpox, vaccination_date, medical_notes, is_zambian_citizen",
     )
     .eq("id", id)
     .maybeSingle();
@@ -280,7 +292,7 @@ export async function getStudentProfile(
   const { data: guardianRows } = await supabase
     .from("student_guardians")
     .select(
-      "id, relationship, is_primary_contact, is_emergency_contact, guardian:guardians(first_name, last_name, phone, alt_phone, email, national_id, occupation, address)",
+      "id, relationship, is_primary_contact, is_emergency_contact, guardian:guardians(first_name, last_name, phone, alt_phone, whatsapp, email, national_id, occupation, address, postal_address)",
     )
     .eq("student_id", id);
 
@@ -302,10 +314,12 @@ export async function getStudentProfile(
     relationship: row.relationship,
     phone: row.guardian?.phone ?? null,
     altPhone: row.guardian?.alt_phone ?? null,
+    whatsapp: row.guardian?.whatsapp ?? null,
     email: row.guardian?.email ?? null,
     nationalId: row.guardian?.national_id ?? null,
     occupation: row.guardian?.occupation ?? null,
     address: row.guardian?.address ?? null,
+    postalAddress: row.guardian?.postal_address ?? null,
     isPrimary: row.is_primary_contact,
     isEmergency: row.is_emergency_contact,
   }));
@@ -329,6 +343,14 @@ export async function getStudentProfile(
   const student_ = student as StudentRow & {
     date_of_birth: string;
     enrollment_date: string;
+    place_of_birth: string | null;
+    religious_denomination: string | null;
+    previous_school: string | null;
+    proposed_admission_date: string | null;
+    vaccinated_smallpox: boolean | null;
+    vaccination_date: string | null;
+    medical_notes: string | null;
+    is_zambian_citizen: boolean | null;
   };
 
   return {
@@ -344,6 +366,14 @@ export async function getStudentProfile(
     gender: student_.gender,
     status: student_.status,
     enrollmentDate: student_.enrollment_date,
+    placeOfBirth: student_.place_of_birth,
+    religiousDenomination: student_.religious_denomination,
+    previousSchool: student_.previous_school,
+    proposedAdmissionDate: student_.proposed_admission_date,
+    vaccinatedSmallpox: student_.vaccinated_smallpox,
+    vaccinationDate: student_.vaccination_date,
+    medicalNotes: student_.medical_notes,
+    isZambianCitizen: student_.is_zambian_citizen,
     currentClassName,
     guardians,
     enrolments,

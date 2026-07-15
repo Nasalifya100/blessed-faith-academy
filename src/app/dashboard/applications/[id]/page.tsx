@@ -105,6 +105,54 @@ export default async function ApplicationDetailPage({
               label="Applying for"
               value={application.appliedClass?.name ?? "-"}
             />
+            <Detail
+              label="Place of birth"
+              value={application.student?.placeOfBirth ?? "-"}
+            />
+            <Detail
+              label="Religious denomination"
+              value={application.student?.religiousDenomination ?? "-"}
+            />
+            <Detail
+              label="Present / last school"
+              value={application.student?.previousSchool ?? "-"}
+            />
+            <Detail
+              label="Proposed admission date"
+              value={formatDate(
+                application.student?.proposedAdmissionDate ?? null,
+              )}
+            />
+            <Detail
+              label="Zambian citizen"
+              value={
+                application.student?.isZambianCitizen === null ||
+                application.student?.isZambianCitizen === undefined
+                  ? "-"
+                  : application.student.isZambianCitizen
+                    ? "Yes"
+                    : "No"
+              }
+            />
+            <Detail
+              label="Vaccinated (smallpox)"
+              value={
+                application.student?.vaccinatedSmallpox === null ||
+                application.student?.vaccinatedSmallpox === undefined
+                  ? "-"
+                  : application.student.vaccinatedSmallpox
+                    ? `Yes${
+                        application.student.vaccinationDate
+                          ? ` (${formatDate(application.student.vaccinationDate)})`
+                          : ""
+                      }`
+                    : "No"
+              }
+            />
+            <Detail
+              label="Medical notes / allergies"
+              value={application.student?.medicalNotes ?? "-"}
+            />
           </dl>
         </CardContent>
       </Card>
@@ -138,8 +186,9 @@ export default async function ApplicationDetailPage({
                     <Badge variant="secondary">Emergency contact</Badge>
                   ) : null}
                 </div>
-                <dl className="grid gap-4 sm:grid-cols-2">
+                <dl className="grid gap-4 sm:grid-cols-3">
                   <Detail label="Phone" value={guardian.phone ?? "-"} />
+                  <Detail label="WhatsApp" value={guardian.whatsapp ?? "-"} />
                   <Detail label="Email" value={guardian.email ?? "-"} />
                 </dl>
               </div>
@@ -165,6 +214,14 @@ export default async function ApplicationDetailPage({
             <Detail
               label="Declaration date"
               value={formatDate(application.consentSignedAt)}
+            />
+            <Detail
+              label="Emergency contact phone"
+              value={application.emergencyContactPhone ?? "-"}
+            />
+            <Detail
+              label="Media release"
+              value={application.mediaReleaseAgreed ? "Yes" : "No"}
             />
             <Detail
               label="Submitted"

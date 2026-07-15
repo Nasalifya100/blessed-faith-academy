@@ -98,6 +98,46 @@ export default async function StudentProfilePage({
               label="Enrollment date"
               value={formatDate(student.enrollmentDate)}
             />
+            <Detail
+              label="Place of birth"
+              value={student.placeOfBirth ?? "-"}
+            />
+            <Detail
+              label="Religious denomination"
+              value={student.religiousDenomination ?? "-"}
+            />
+            <Detail
+              label="Present / last school"
+              value={student.previousSchool ?? "-"}
+            />
+            <Detail
+              label="Proposed admission date"
+              value={formatDate(student.proposedAdmissionDate)}
+            />
+            <Detail
+              label="Zambian citizen"
+              value={
+                student.isZambianCitizen === null
+                  ? "-"
+                  : student.isZambianCitizen
+                    ? "Yes"
+                    : "No"
+              }
+            />
+            <Detail
+              label="Vaccinated (smallpox)"
+              value={
+                student.vaccinatedSmallpox === null
+                  ? "-"
+                  : student.vaccinatedSmallpox
+                    ? `Yes${student.vaccinationDate ? ` (${formatDate(student.vaccinationDate)})` : ""}`
+                    : "No"
+              }
+            />
+            <Detail
+              label="Medical notes / allergies"
+              value={student.medicalNotes ?? "-"}
+            />
           </dl>
         </CardContent>
       </Card>
@@ -133,6 +173,7 @@ export default async function StudentProfilePage({
                 </div>
                 <dl className="grid gap-4 sm:grid-cols-3">
                   <Detail label="Phone" value={guardian.phone ?? "-"} />
+                  <Detail label="WhatsApp" value={guardian.whatsapp ?? "-"} />
                   <Detail
                     label="Alternate phone"
                     value={guardian.altPhone ?? "-"}
@@ -146,7 +187,14 @@ export default async function StudentProfilePage({
                     label="Occupation"
                     value={guardian.occupation ?? "-"}
                   />
-                  <Detail label="Address" value={guardian.address ?? "-"} />
+                  <Detail
+                    label="Residential address"
+                    value={guardian.address ?? "-"}
+                  />
+                  <Detail
+                    label="Postal address"
+                    value={guardian.postalAddress ?? "-"}
+                  />
                 </dl>
               </div>
             ))

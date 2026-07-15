@@ -11,12 +11,17 @@ import {
 } from "@/features/applications/schemas";
 import { createApplicationAction } from "@/features/applications/actions";
 import {
+  emptyGuardian,
+  DECLARATION_CLAUSES,
   GENDERS,
   GENDER_LABELS,
-  GUARDIAN_RELATIONSHIPS,
-  RELATIONSHIP_LABELS,
 } from "@/features/students/schemas";
 import type { ClassOption } from "@/features/students/queries";
+import { StudentExtraFields } from "@/features/students/components/student-extra-fields";
+import {
+  GuardianFields,
+  makePrimaryHelper,
+} from "@/features/students/components/guardian-fields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,24 +33,6 @@ interface ApplicationFormProps {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-
-function emptyGuardian(
-  isPrimary: boolean,
-): CreateApplicationInput["guardians"][number] {
-  return {
-    first_name: "",
-    last_name: "",
-    relationship: "mother",
-    phone: "",
-    alt_phone: "",
-    email: "",
-    national_id: "",
-    occupation: "",
-    address: "",
-    is_primary_contact: isPrimary,
-    is_emergency_contact: false,
-  };
-}
 
 export function ApplicationForm({
   classes,
@@ -71,9 +58,19 @@ export function ApplicationForm({
       date_of_birth: "",
       gender: "male",
       applied_class_id: classes[0]?.id ?? "",
+      place_of_birth: "",
+      religious_denomination: "",
+      previous_school: "",
+      proposed_admission_date: "",
+      vaccinated_smallpox: false,
+      vaccination_date: "",
+      medical_notes: "",
+      is_zambian_citizen: true,
       consent_agreed: false,
       consent_signed_by: "",
       consent_signed_at: today(),
+      emergency_contact_phone: "",
+      media_release_agreed: false,
       guardians: [emptyGuardian(true)],
     },
   });
@@ -84,15 +81,6 @@ export function ApplicationForm({
   });
 
   const watchedGuardians = useWatch({ control, name: "guardians" });
-
-  function makePrimary(index: number) {
-    const guardians = getValues("guardians");
-    guardians.forEach((_, i) => {
-      setValue(`guardians.${i}.is_primary_contact`, i === index, {
-        shouldValidate: true,
-      });
-    });
-  }
 
   async function onSubmit(values: CreateApplicationInput) {
     setServerError(null);
@@ -217,6 +205,9 @@ export function ApplicationForm({
         </div>
       </section>
 
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <StudentExtraFields register={register as any} errors={errors} />
+
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
@@ -240,142 +231,19 @@ export function ApplicationForm({
 
         <div className="space-y-6">
           {fields.map((field, index) => (
-            <div key={field.id} className="space-y-4 rounded-lg border p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Guardian {index + 1}</p>
-                {fields.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => remove(index)}
-                  >
-                    Remove
-                  </Button>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-first`}>First name</Label>
-                  <Input
-                    id={`g-${index}-first`}
-                    aria-invalid={Boolean(errors.guardians?.[index]?.first_name)}
-                    {...register(`guardians.${index}.first_name`)}
-                  />
-                  {errors.guardians?.[index]?.first_name ? (
-                    <p className="text-sm text-destructive">
-                      {errors.guardians[index]?.first_name?.message}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-last`}>Last name</Label>
-                  <Input
-                    id={`g-${index}-last`}
-                    aria-invalid={Boolean(errors.guardians?.[index]?.last_name)}
-                    {...register(`guardians.${index}.last_name`)}
-                  />
-                  {errors.guardians?.[index]?.last_name ? (
-                    <p className="text-sm text-destructive">
-                      {errors.guardians[index]?.last_name?.message}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-rel`}>Relationship</Label>
-                  <SelectNative
-                    id={`g-${index}-rel`}
-                    {...register(`guardians.${index}.relationship`)}
-                  >
-                    {GUARDIAN_RELATIONSHIPS.map((value) => (
-                      <option key={value} value={value}>
-                        {RELATIONSHIP_LABELS[value]}
-                      </option>
-                    ))}
-                  </SelectNative>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-phone`}>Phone</Label>
-                  <Input
-                    id={`g-${index}-phone`}
-                    {...register(`guardians.${index}.phone`)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-alt`}>Alternate phone</Label>
-                  <Input
-                    id={`g-${index}-alt`}
-                    {...register(`guardians.${index}.alt_phone`)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-email`}>Email</Label>
-                  <Input
-                    id={`g-${index}-email`}
-                    type="email"
-                    aria-invalid={Boolean(errors.guardians?.[index]?.email)}
-                    {...register(`guardians.${index}.email`)}
-                  />
-                  {errors.guardians?.[index]?.email ? (
-                    <p className="text-sm text-destructive">
-                      {errors.guardians[index]?.email?.message}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-nrc`}>NRC / national ID</Label>
-                  <Input
-                    id={`g-${index}-nrc`}
-                    {...register(`guardians.${index}.national_id`)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`g-${index}-occ`}>Occupation</Label>
-                  <Input
-                    id={`g-${index}-occ`}
-                    {...register(`guardians.${index}.occupation`)}
-                  />
-                </div>
-
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor={`g-${index}-addr`}>Address</Label>
-                  <Input
-                    id={`g-${index}-addr`}
-                    {...register(`guardians.${index}.address`)}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-6">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4 rounded border-input"
-                    checked={Boolean(
-                      watchedGuardians?.[index]?.is_primary_contact,
-                    )}
-                    onChange={() => makePrimary(index)}
-                  />
-                  Primary contact
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="size-4 rounded border-input"
-                    {...register(`guardians.${index}.is_emergency_contact`)}
-                  />
-                  Emergency contact
-                </label>
-              </div>
-            </div>
+            <GuardianFields
+              key={field.id}
+              index={index}
+              /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+              register={register as any}
+              errors={errors}
+              isPrimary={Boolean(watchedGuardians?.[index]?.is_primary_contact)}
+              canRemove={fields.length > 1}
+              onMakePrimary={() =>
+                makePrimaryHelper(getValues, setValue, index)
+              }
+              onRemove={() => remove(index)}
+            />
           ))}
         </div>
       </section>
@@ -384,12 +252,18 @@ export function ApplicationForm({
         <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
           Declaration &amp; consent
         </h3>
-        <p className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
-          I declare that the information provided in this application is true and
-          correct. I agree to abide by the rules and policies of Blessed Faith
-          Academy and to meet the school fees and other financial obligations
-          for my child.
-        </p>
+        <div className="space-y-3 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+          <p>
+            I declare that the information on this form is to the best of my
+            knowledge and belief true and correct and that if the child is
+            enrolled as a pupil I agree to the following:
+          </p>
+          <ol className="list-decimal space-y-1 pl-5">
+            {DECLARATION_CLAUSES.map((clause) => (
+              <li key={clause}>{clause}</li>
+            ))}
+          </ol>
+        </div>
 
         <label className="flex items-start gap-2 text-sm">
           <input
@@ -435,6 +309,32 @@ export function ApplicationForm({
             ) : null}
           </div>
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="emergency_contact_phone">
+            Emergency medical authorization — contact me on
+          </Label>
+          <Input
+            id="emergency_contact_phone"
+            aria-invalid={Boolean(errors.emergency_contact_phone)}
+            {...register("emergency_contact_phone")}
+          />
+          {errors.emergency_contact_phone ? (
+            <p className="text-sm text-destructive">
+              {errors.emergency_contact_phone.message}
+            </p>
+          ) : null}
+        </div>
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 rounded border-input"
+            {...register("media_release_agreed")}
+          />
+          I give permission for photographs and videos of my child to be used
+          for school promotional purposes.
+        </label>
       </section>
 
       {serverError ? (
