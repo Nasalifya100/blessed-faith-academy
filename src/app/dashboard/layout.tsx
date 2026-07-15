@@ -35,6 +35,12 @@ export default async function DashboardLayout({
     ? ROLE_LABELS[current.profile.role]
     : "No role assigned";
   const isAdmin = current.profile?.role === "administrator";
+  const canSeeFees = Boolean(
+    current.profile?.role &&
+      ["administrator", "bursar", "headteacher", "secretary"].includes(
+        current.profile.role,
+      ),
+  );
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -58,6 +64,11 @@ export default async function DashboardLayout({
           >
             Applications
           </Link>
+          {canSeeFees ? (
+            <Link href="/dashboard/fees" className="text-sm hover:underline">
+              Fees
+            </Link>
+          ) : null}
           {isAdmin ? (
             <Link href="/dashboard/staff" className="text-sm hover:underline">
               Staff

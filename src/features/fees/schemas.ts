@@ -1,0 +1,40 @@
+import { z } from "zod";
+
+export const FEE_CATEGORIES = [
+  "tuition",
+  "extra",
+  "meal",
+  "uniform",
+] as const;
+
+export const FEE_CATEGORY_LABELS: Record<(typeof FEE_CATEGORIES)[number], string> =
+  {
+    tuition: "Tuition",
+    extra: "Extra fees",
+    meal: "Meals",
+    uniform: "Uniforms",
+  };
+
+export const BILLING_FREQUENCY_LABELS: Record<string, string> = {
+  term: "Per term",
+  year: "Per year",
+  once: "Once",
+  monthly: "Monthly",
+  weekly: "Weekly",
+};
+
+export const REQUIREMENT_BAND_LABELS: Record<string, string> = {
+  preschool: "Pre-school (Baby–Pre-grade)",
+  lower: "Lower primary (Grade 1–4)",
+  upper: "Upper primary (Grade 5–7)",
+  all: "All grades",
+};
+
+export const updateScheduleAmountSchema = z.object({
+  scheduleId: z.string().uuid(),
+  amount: z.number().min(0, "Amount cannot be negative"),
+});
+
+export type UpdateScheduleAmountInput = z.infer<
+  typeof updateScheduleAmountSchema
+>;
