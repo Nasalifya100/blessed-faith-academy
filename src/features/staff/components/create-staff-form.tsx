@@ -93,8 +93,8 @@ export function CreateStaffForm() {
           <Label htmlFor="password">Temporary password</Label>
           <Input
             id="password"
-            type="text"
-            autoComplete="off"
+            type="password"
+            autoComplete="new-password"
             aria-invalid={Boolean(errors.password)}
             {...register("password")}
           />

@@ -61,7 +61,7 @@ export default async function FeesPage() {
           {academicYearName ? ` academic year ${academicYearName}` : " the current academic year"}
           {canEdit
             ? ". Click an amount to edit it."
-            : ". Contact an administrator or bursar to change amounts."}
+            : ". View only — contact an administrator or bursar to change amounts or record payments."}
         </p>
       </div>
 

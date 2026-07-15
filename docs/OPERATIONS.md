@@ -78,6 +78,7 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716100300_archive_student.sql` | Archive RPC; revoke student DELETE |
 | `20260716110000_application_review_guards.sql` | Approve/reject validation (consent, guardians, reason) |
 | `20260716110100_transfer_student_class.sql` | Mid-year class transfer + one active enrolment per year |
+| `20260716120000_config_integrity_constraints.sql` | Admission uniqueness, one current year/term, unique fee schedules |
 
 ### Auth / signup (required)
 
@@ -161,7 +162,9 @@ Use `formatKwacha` from `src/lib/money.ts` for all user-facing amounts (`en-ZM`)
 
 Nav gating (approximate):
 
-- **Fees:** administrator, bursar, headteacher, secretary  
+- **Fees catalogue:** administrator, bursar, headteacher, secretary  
+  - **Edit amounts / record payments / generate charges:** administrator, bursar, headteacher only  
+  - Secretary is **view-only** on Fees (catalogue + requirements); student fee actions on the profile are also excluded  
 - **Attendance:** administrator, headteacher, secretary, teacher  
 - **Discipline:** administrator, headteacher, secretary, teacher  
 - **Staff:** administrator only  
