@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Blessed Faith Academy — School Management System
 
-## Getting Started
+Web-based school management for **Blessed Faith Academy** (Zambia). Staff can manage enrolment, fees and payments, attendance, school rules, discipline, and reports. Permissions are enforced in the app and in the database (Supabase Row Level Security).
 
-First, run the development server:
+**Currency:** Zambian Kwacha (ZMW), shown as `K…`  
+**Payments:** Mobile money and bank transfer only (no cash)
+
+## Documentation
+
+| Document | Audience |
+|---|---|
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Office staff, teachers, bursar — how to use the system day to day |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Developers / IT — setup, migrations, env, architecture |
+
+## Tech stack
+
+- **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend:** Next.js Server Actions + Supabase (Postgres, Auth, RLS)
+- **Validation:** Zod · **Forms:** React Hook Form
+
+## Quick start
+
+1. Copy `.env.example` to `.env.local` and fill in Supabase values (see [Operations](docs/OPERATIONS.md#environment-variables)).
+2. Run all SQL migrations in order in the Supabase SQL Editor (see [Operations](docs/OPERATIONS.md#database-migrations)).
+3. Install and run:
 
 ```bash
+cd blessed-faith-academy
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and sign in at `/login`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features at a glance
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Area | Routes |
+|---|---|
+| Students | `/dashboard/students` |
+| Applications | `/dashboard/applications` |
+| Fees | `/dashboard/fees`, student profile, payment receipts |
+| Attendance | `/dashboard/attendance`, covers |
+| Rules & discipline | `/dashboard/rules`, `/dashboard/discipline` |
+| Reports | `/dashboard/reports` (print + CSV) |
+| Staff (admin only) | `/dashboard/staff` |
 
-## Learn More
+## Locked fee bands (2026)
 
-To learn more about Next.js, take a look at the following resources:
+| Item | Amount |
+|---|---|
+| Early childhood / Pre-grade tuition | K1,200 / term |
+| Grades 1–7 tuition | K1,150 / term |
+| Report book | K10 / year |
+| PTA | K150 / year |
+| Maintenance | K50 / year |
+| Meals (optional) | Weekly K150 · Monthly K500 · Termly K1,400 |
+| Uniforms | Optional priced items (charged once per year when opted in) |
+| Requirements | Checklist only — not billed |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run dev     # local development
+npm run build   # production build
+npm run start   # run production build
+npm run lint    # ESLint
+```
 
-## Deploy on Vercel
+## License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Private school project — not published as open source unless the school decides otherwise.
