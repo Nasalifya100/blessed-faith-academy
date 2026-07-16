@@ -76,7 +76,7 @@ export async function createStudentAction(
   const { data: studentId, error } = await supabase.rpc(
     "create_enrolled_student",
     {
-      p_admission_number: data.admission_number.trim(),
+      p_admission_number: data.admission_number,
       p_first_name: data.first_name.trim(),
       p_middle_name: data.middle_name?.trim() ?? "",
       p_last_name: data.last_name.trim(),
@@ -97,11 +97,12 @@ export async function createStudentAction(
   );
 
   if (error) {
-    const message = error.message.includes(
-      "students_school_id_admission_number_key",
-    )
-      ? "That admission number is already in use. Please use a different one."
-      : error.message;
+    const message =
+      error.message.includes("students_school_admission_number_lower_uidx") ||
+      error.message.includes("students_school_id_admission_number_key") ||
+      error.message.toLowerCase().includes("duplicate key")
+        ? "That admission number is already in use. Please use a different one."
+        : error.message;
     return { error: message, studentId: null, nextAdmissionNumber: null };
   }
 
@@ -178,4 +179,55 @@ export async function transferStudentClassAction(
   revalidatePath("/dashboard/students");
   revalidatePath("/dashboard/attendance");
   return { error: null };
+}
+
+export interface GuardianCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  nationalId: string | null;
+  matchReason: string;
+}
+
+export async function listGuardianCandidatesAction(input: {
+  nationalId?: string;
+  phone?: string;
+}): Promise<{ error: string | null; candidates: GuardianCandidate[] }> {
+  const auth = await assertStudentManager();
+  if (!auth.ok) {
+    return { error: auth.error, candidates: [] };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("list_guardian_candidates", {
+    p_national_id: input.nationalId?.trim() ?? "",
+    p_phone: input.phone?.trim() ?? "",
+  });
+
+  if (error) {
+    return { error: error.message, candidates: [] };
+  }
+
+  const rows =
+    (data as {
+      id: string;
+      first_name: string;
+      last_name: string;
+      phone: string | null;
+      national_id: string | null;
+      match_reason: string;
+    }[] | null) ?? [];
+
+  return {
+    error: null,
+    candidates: rows.map((row) => ({
+      id: row.id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      phone: row.phone,
+      nationalId: row.national_id,
+      matchReason: row.match_reason,
+    })),
+  };
 }

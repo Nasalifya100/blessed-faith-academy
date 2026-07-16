@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import type {
   FieldErrors,
   FieldValues,
@@ -29,6 +30,11 @@ interface GuardianFieldsProps<T extends WithGuardians> {
   canRemove: boolean;
   onMakePrimary: () => void;
   onRemove: () => void;
+  nationalId?: string;
+  phone?: string;
+  existingGuardianId?: string;
+  onSelectExistingGuardian?: (id: string) => void;
+  onClearExistingGuardian?: () => void;
 }
 
 export function GuardianFields<T extends WithGuardians>({
@@ -39,10 +45,49 @@ export function GuardianFields<T extends WithGuardians>({
   canRemove,
   onMakePrimary,
   onRemove,
+  nationalId = "",
+  phone = "",
+  existingGuardianId = "",
+  onSelectExistingGuardian,
+  onClearExistingGuardian,
 }: GuardianFieldsProps<T>) {
   const fieldErrors = (
     errors.guardians as FieldErrors<GuardianInput>[] | undefined
   )?.[index];
+  const [candidates, setCandidates] = useState<
+    {
+      id: string;
+      firstName: string;
+      lastName: string;
+      phone: string | null;
+      nationalId: string | null;
+      matchReason: string;
+    }[]
+  >([]);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [isLookingUp, startLookup] = useTransition();
+
+  function findMatches() {
+    setLookupError(null);
+    startLookup(async () => {
+      const { listGuardianCandidatesAction } = await import(
+        "@/features/students/actions"
+      );
+      const result = await listGuardianCandidatesAction({
+        nationalId,
+        phone,
+      });
+      if (result.error) {
+        setLookupError(result.error);
+        setCandidates([]);
+        return;
+      }
+      setCandidates(result.candidates);
+      if (result.candidates.length === 0) {
+        setLookupError("No matching guardians found for NRC or phone.");
+      }
+    });
+  }
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
@@ -189,6 +234,69 @@ export function GuardianFields<T extends WithGuardians>({
           Emergency contact
         </label>
       </div>
+
+      {onSelectExistingGuardian ? (
+        <div className="space-y-2 rounded-lg border border-dashed p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isLookingUp || (!nationalId.trim() && !phone.trim())}
+              onClick={findMatches}
+            >
+              {isLookingUp ? "Searching…" : "Find existing guardian"}
+            </Button>
+            {existingGuardianId ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClearExistingGuardian}
+              >
+                Clear link
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            NRC matches can auto-link on save. Phone matches need an explicit
+            selection here (shared numbers are not merged automatically).
+          </p>
+          {existingGuardianId ? (
+            <p className="text-sm text-emerald-700">
+              Linked to existing guardian record.
+            </p>
+          ) : null}
+          {lookupError ? (
+            <p className="text-sm text-muted-foreground">{lookupError}</p>
+          ) : null}
+          {candidates.length > 0 ? (
+            <ul className="space-y-2">
+              {candidates.map((candidate) => (
+                <li key={candidate.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-md border px-3 py-2 text-left text-sm hover:bg-muted/50"
+                    onClick={() => onSelectExistingGuardian(candidate.id)}
+                  >
+                    <span className="font-medium">
+                      {candidate.firstName} {candidate.lastName}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {candidate.matchReason}
+                      {candidate.phone ? ` · ${candidate.phone}` : ""}
+                      {candidate.nationalId
+                        ? ` · NRC ${candidate.nationalId}`
+                        : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

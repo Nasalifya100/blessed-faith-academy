@@ -92,6 +92,8 @@ export const guardianSchema = z.object({
   postal_address: optionalText,
   is_primary_contact: z.boolean(),
   is_emergency_contact: z.boolean(),
+  /** Confirmed sibling reuse; phone matches never auto-apply without this. */
+  existing_guardian_id: z.string().uuid().optional().or(z.literal("")),
 });
 
 export type GuardianInput = z.infer<typeof guardianSchema>;
@@ -110,7 +112,10 @@ export const studentExtraFieldsSchema = z.object({
 
 export const createStudentSchema = z
   .object({
-    admission_number: z.string().min(1, "Admission number is required"),
+    admission_number: z
+      .string()
+      .min(1, "Admission number is required")
+      .transform((value) => value.trim().toUpperCase()),
     first_name: z.string().min(1, "First name is required"),
     middle_name: optionalText,
     last_name: z.string().min(1, "Last name is required"),
@@ -153,6 +158,7 @@ export function mapGuardianPayload(guardian: GuardianInput) {
     postal_address: guardian.postal_address ?? "",
     is_primary_contact: guardian.is_primary_contact,
     is_emergency_contact: guardian.is_emergency_contact,
+    existing_guardian_id: guardian.existing_guardian_id?.trim() || "",
   };
 }
 
@@ -171,6 +177,7 @@ export function emptyGuardian(isPrimary: boolean): GuardianInput {
     postal_address: "",
     is_primary_contact: isPrimary,
     is_emergency_contact: false,
+    existing_guardian_id: "",
   };
 }
 

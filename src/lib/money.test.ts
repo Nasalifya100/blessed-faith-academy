@@ -13,8 +13,22 @@ import {
   canBrowseStudents,
   canManageApplications,
   canManageStudents,
+  canViewStudentMedical,
   canViewStudentProfile,
 } from "@/features/auth/permissions";
+import {
+  createStudentSchema,
+  archiveStudentSchema,
+  transferStudentClassSchema,
+} from "@/features/students/schemas";
+import {
+  recordPaymentSchema,
+  voidPaymentSchema,
+} from "@/features/fees/schemas";
+import {
+  approveApplicationSchema,
+  rejectApplicationSchema,
+} from "@/features/applications/schemas";
 
 describe("money (ngwee)", () => {
   it("converts to and from ngwee without float drift", () => {
@@ -38,6 +52,10 @@ describe("csvField formula injection", () => {
     expect(csvField("+cmd")).toBe("'+cmd");
     expect(csvField("-2")).toBe("'-2");
     expect(csvField("@SUM")).toBe("'@SUM");
+    expect(csvField("\t=hijack")).toBe("'\t=hijack");
+    // CR triggers CSV quoting after the formula prefix.
+    expect(csvField("\r=hijack")).toBe("\"'\r=hijack\"");
+    expect(csvField(" =1+1")).toBe("' =1+1");
   });
 
   it("quotes fields with commas", () => {
@@ -58,12 +76,103 @@ describe("schoolToday", () => {
 });
 
 describe("permissions", () => {
-  it("gates student directory vs profile", () => {
+  it("gates student directory vs profile and medical", () => {
     expect(canManageStudents("teacher")).toBe(false);
     expect(canBrowseStudents("teacher")).toBe(false);
     expect(canBrowseStudents("bursar")).toBe(true);
     expect(canViewStudentProfile("teacher")).toBe(true);
+    expect(canViewStudentMedical("bursar")).toBe(false);
+    expect(canViewStudentMedical("secretary")).toBe(true);
     expect(canManageApplications("bursar")).toBe(false);
     expect(canManageApplications("secretary")).toBe(true);
+  });
+});
+
+const UUID_A = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+const UUID_B = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+const UUID_C = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
+
+describe("admission number normalization", () => {
+  it("uppercases admission numbers on parse", () => {
+    const parsed = createStudentSchema.safeParse({
+      admission_number: " bfa-12 ",
+      first_name: "Ada",
+      last_name: "Banda",
+      date_of_birth: "2015-01-01",
+      gender: "female",
+      enrollment_date: "2026-01-15",
+      class_id: UUID_A,
+      guardians: [
+        {
+          first_name: "Mary",
+          last_name: "Banda",
+          relationship: "mother",
+          is_primary_contact: true,
+          is_emergency_contact: true,
+        },
+      ],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.admission_number).toBe("BFA-12");
+    }
+  });
+});
+
+describe("payment schemas", () => {
+  it("rejects overpayment when maxAmount is set", () => {
+    const parsed = recordPaymentSchema.safeParse({
+      studentId: UUID_A,
+      amount: 50,
+      method: "mobile_money",
+      idempotencyKey: UUID_B,
+      paid_on: "2026-07-15",
+      maxAmount: 40,
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("requires void reason", () => {
+    const parsed = voidPaymentSchema.safeParse({
+      paymentId: UUID_A,
+      studentId: UUID_B,
+      reason: "ab",
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe("application review schemas", () => {
+  it("requires reject notes", () => {
+    const parsed = rejectApplicationSchema.safeParse({
+      applicationId: UUID_A,
+      notes: "no",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("accepts approve payload", () => {
+    const parsed = approveApplicationSchema.safeParse({
+      applicationId: UUID_A,
+      class_id: UUID_B,
+    });
+    expect(parsed.success).toBe(true);
+  });
+});
+
+describe("archive and transfer schemas", () => {
+  it("accepts archive and transfer ids", () => {
+    expect(
+      archiveStudentSchema.safeParse({
+        studentId: UUID_A,
+        reason: "Left school",
+      }).success,
+    ).toBe(true);
+    expect(
+      transferStudentClassSchema.safeParse({
+        studentId: UUID_A,
+        newClassId: UUID_B,
+      }).success,
+    ).toBe(true);
   });
 });

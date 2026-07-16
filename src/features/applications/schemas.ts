@@ -36,7 +36,10 @@ export const APPLICATION_STATUS_LABELS: Record<
 
 export const createApplicationSchema = z
   .object({
-    admission_number: z.string().min(1, "Admission number is required"),
+    admission_number: z
+      .string()
+      .min(1, "Admission number is required")
+      .transform((value) => value.trim().toUpperCase()),
     first_name: z.string().min(1, "First name is required"),
     middle_name: z.string().optional().or(z.literal("")),
     last_name: z.string().min(1, "Last name is required"),

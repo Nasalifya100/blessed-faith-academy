@@ -242,6 +242,21 @@ export function ApplicationForm({
                 makePrimaryHelper(getValues, setValue, index)
               }
               onRemove={() => remove(index)}
+              nationalId={watchedGuardians?.[index]?.national_id ?? ""}
+              phone={watchedGuardians?.[index]?.phone ?? ""}
+              existingGuardianId={
+                watchedGuardians?.[index]?.existing_guardian_id ?? ""
+              }
+              onSelectExistingGuardian={(id) =>
+                setValue(`guardians.${index}.existing_guardian_id`, id, {
+                  shouldDirty: true,
+                })
+              }
+              onClearExistingGuardian={() =>
+                setValue(`guardians.${index}.existing_guardian_id`, "", {
+                  shouldDirty: true,
+                })
+              }
             />
           ))}
         </div>

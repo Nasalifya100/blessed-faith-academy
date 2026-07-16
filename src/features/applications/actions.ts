@@ -73,7 +73,7 @@ export async function createApplicationAction(
   const { data: applicationId, error } = await supabase.rpc(
     "create_application",
     {
-      p_admission_number: data.admission_number.trim(),
+      p_admission_number: data.admission_number,
       p_first_name: data.first_name.trim(),
       p_middle_name: data.middle_name?.trim() ?? "",
       p_last_name: data.last_name.trim(),
@@ -98,11 +98,12 @@ export async function createApplicationAction(
   );
 
   if (error) {
-    const message = error.message.includes(
-      "students_school_id_admission_number_key",
-    )
-      ? "That admission number is already in use. Please use a different one."
-      : error.message;
+    const message =
+      error.message.includes("students_school_admission_number_lower_uidx") ||
+      error.message.includes("students_school_id_admission_number_key") ||
+      error.message.toLowerCase().includes("duplicate key")
+        ? "That admission number is already in use. Please use a different one."
+        : error.message;
     return { error: message, applicationId: null };
   }
 

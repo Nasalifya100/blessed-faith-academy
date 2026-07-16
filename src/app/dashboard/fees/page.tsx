@@ -11,6 +11,8 @@ import {
 } from "@/features/fees/schemas";
 import { ScheduleAmountEditor } from "@/features/fees/components/schedule-amount-editor";
 import { GenerateClassChargesPanel } from "@/features/fees/components/generate-class-charges-panel";
+import { SetCurrentPeriodPanel } from "@/features/config/components/set-current-period-panel";
+import { listAcademicYearsAndTerms } from "@/features/config/queries";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -45,8 +47,18 @@ export default async function FeesPage() {
   }
 
   const canEdit = FEE_MANAGER_ROLES.includes(role);
-  const [{ academicYearName, currentTermId, currentTermName, items, requirements }, yearClasses] =
-    await Promise.all([getFeesSetupData(), getCurrentYearClasses()]);
+  const isAdmin = role === "administrator";
+  const [
+    { academicYearName, currentTermId, currentTermName, items, requirements },
+    yearClasses,
+    periodOptions,
+  ] = await Promise.all([
+    getFeesSetupData(),
+    getCurrentYearClasses(),
+    isAdmin
+      ? listAcademicYearsAndTerms()
+      : Promise.resolve({ years: [], terms: [] }),
+  ]);
 
   const requirementsByBand = new Map<string, typeof requirements>();
   for (const item of requirements) {
@@ -67,6 +79,24 @@ export default async function FeesPage() {
             : ". View only — contact an administrator or bursar to change amounts or record payments."}
         </p>
       </div>
+
+      {isAdmin ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Current year &amp; term</CardTitle>
+            <CardDescription>
+              Switch the school&apos;s active academic period (one current year
+              and one current term).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SetCurrentPeriodPanel
+              years={periodOptions.years}
+              terms={periodOptions.terms}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {canEdit ? (
         <Card>

@@ -83,6 +83,41 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716130000_overpayment_and_school_scoped_select.sql` | Cap payments at balance; school-scope config SELECT |
 | `20260716130100_reuse_guardians.sql` | Match/link guardians by NRC or phone on enrol/apply |
 | `20260716140000_attendance_uniqueness_and_cover_overlap.sql` | One mark per student/day; no overlapping covers |
+| `20260716150100_admission_normalize_on_write.sql` | Uppercase admission on write; fail if case-duplicates |
+| `20260716150200_current_term_per_school.sql` | One current term per school; set_current_* RPCs |
+| `20260716150300_guardian_safe_reuse.sql` | NRC auto-link; phone only via explicit confirm |
+| `20260716150400_revoke_remaining_deletes.sql` | Revoke hard DELETE on remaining operational tables |
+| `20260716150500_search_path_indexes_fee_verify.sql` | Indexes; DEFINER search_path; fee unique verify |
+
+### Sprint 4 pre-apply detection (run in SQL Editor)
+
+Resolve any rows returned **before** applying Sprint 4 migrations. Do **not** delete blindly.
+
+```sql
+-- Admission case collisions
+select school_id, lower(admission_number) as key, count(*),
+       array_agg(id), array_agg(admission_number)
+from public.students
+group by school_id, lower(admission_number)
+having count(*) > 1;
+
+-- Multiple current terms per school
+select ay.school_id, count(*), array_agg(t.id), array_agg(t.name)
+from public.terms t
+join public.academic_years ay on ay.id = t.academic_year_id
+where t.is_current
+group by ay.school_id
+having count(*) > 1;
+
+-- Duplicate fee schedules
+select school_id, fee_item_id, academic_year_id, grade_level_id, term_id,
+       count(*), array_agg(id), array_agg(amount)
+from public.fee_schedules
+group by 1,2,3,4,5
+having count(*) > 1;
+```
+
+**Current year/term:** Administrators switch via **Fees → Current year & term** (`set_current_academic_year` / `set_current_term`). Only one current year and one current term per school.
 
 ### Auth / signup (required)
 
