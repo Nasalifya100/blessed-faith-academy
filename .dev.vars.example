@@ -1,0 +1,3 @@
+# Copy to .dev.vars for OpenNext / Wrangler local preview (git-ignored).
+# Does not replace .env.local — keep Supabase keys in .env.local for next dev.
+NEXTJS_ENV=development

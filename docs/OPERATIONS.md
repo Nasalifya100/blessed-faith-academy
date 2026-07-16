@@ -248,16 +248,71 @@ Changing published fees for a live year should be done carefully in `fee_schedul
 
 ---
 
-## Deployment checklist
+## Deployment checklist (generic)
 
-1. Set production env vars (same three as local; never expose service role to the client).
-2. Confirm all migrations are applied on the production Supabase project.
+1. Set production/staging env vars (same three as local; never expose service role to the client).
+2. Confirm all migrations are applied on the target Supabase project.
 3. `npm run build` succeeds.
 4. Create at least one administrator account.
 5. Assign academic year/term and class structure (from core seed or office updates).
 6. Smoke-test: login → student → generate charges → payment → attendance → report print/CSV.
 
-Hosting is typically Vercel (or any Node host) pointed at the same Supabase project.
+---
+
+## Cloudflare Workers staging (OpenNext)
+
+Budget-friendly staging runs on **Cloudflare Workers** via `@opennextjs/cloudflare` (full-stack Next.js — not a static Pages export).
+
+**Worker name:** `bfa-sms-staging` (see `wrangler.jsonc`).
+
+### Prerequisites
+
+- Node.js 20+
+- Separate **staging** Supabase project (no real student data)
+- All migrations applied on that project in order
+- Public email signup **OFF** in Supabase Auth
+- Wrangler ≥ 4.59.2 (installed as a devDependency; required for Next.js 16.1+)
+
+### Environment variables
+
+| Variable | Kind | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Public | Staging project URL (build + runtime) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Staging anon key (build + runtime) |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Secret** | Staging service role only; Cloudflare Secret; never `NEXT_PUBLIC_` |
+
+Local `next dev` continues to use `.env.local`. For Workers preview, copy `.dev.vars.example` → `.dev.vars` (`NEXTJS_ENV=development`).
+
+On Cloudflare: set Runtime variables/secrets on the Worker, and the same values under **Build variables and secrets** if using Workers Builds.
+
+### Local commands
+
+```bash
+npm run dev       # Next.js in Node (fast iteration)
+npm run preview   # OpenNext build + workerd (closest to staging)
+npm run deploy    # Build + deploy (only when explicitly approved)
+```
+
+Compatibility flags in `wrangler.jsonc`: `nodejs_compat`, `global_fetch_strictly_public`.
+
+**Windows:** OpenNext Windows support is limited. If `preview`/`deploy` fails on native Windows, use WSL or Linux CI.
+
+### Supabase Auth redirects (staging)
+
+After the Worker URL exists (`https://bfa-sms-staging.<account>.workers.dev`):
+
+1. Supabase → Authentication → URL Configuration  
+2. **Site URL** = the Workers URL  
+3. **Redirect URLs** include that origin (and `http://localhost:3000/**` if developing against staging DB)  
+4. Confirm public signup remains **OFF**
+
+### Rollback
+
+1. Cloudflare → Workers → `bfa-sms-staging` → roll back or delete the Worker.  
+2. Git: return to `v1-stabilization` (or revert deploy commits).  
+3. Point Auth Site URL back to localhost if needed.  
+
+Do not point the staging Worker at a production Supabase project.
 
 ---
 
