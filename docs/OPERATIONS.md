@@ -303,6 +303,8 @@ npm run deploy    # Build + deploy (only when explicitly approved)
 
 Compatibility flags in `wrangler.jsonc`: `nodejs_compat`, `global_fetch_strictly_public`.
 
+**Auth gate file:** use `src/middleware.ts` (Edge), not `src/proxy.ts`. Next.js 16 `proxy.ts` is Node-only and fails OpenNext with `Node.js middleware is not currently supported`.
+
 **Windows:** OpenNext Windows support is limited. If `preview`/`deploy` fails on native Windows, use WSL or Linux CI.
 
 ### Supabase Auth redirects (staging)
