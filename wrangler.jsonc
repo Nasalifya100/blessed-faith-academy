@@ -1,3 +1,14 @@
+// Public env vars are NOT set in this file (keeps keys out of git).
+//
+// Runtime — Cloudflare Dashboard → Workers → bfa-sms-staging →
+//           Settings → Variables and Secrets
+//   NEXT_PUBLIC_SUPABASE_URL          (Variable)
+//   NEXT_PUBLIC_SUPABASE_ANON_KEY     (Variable)
+//   SUPABASE_SERVICE_ROLE_KEY         (Secret only)
+//
+// Build (Workers Builds / CI) — same names under Build variables and secrets
+// Local CLI build — .env.local (deploy script uses --keep-vars)
+// NEXT_PUBLIC_SITE_URL is not used by this app.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bfa-sms-staging",

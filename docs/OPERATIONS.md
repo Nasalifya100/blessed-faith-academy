@@ -281,9 +281,17 @@ Budget-friendly staging runs on **Cloudflare Workers** via `@opennextjs/cloudfla
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Staging anon key (build + runtime) |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret** | Staging service role only; Cloudflare Secret; never `NEXT_PUBLIC_` |
 
-Local `next dev` continues to use `.env.local`. For Workers preview, copy `.dev.vars.example` → `.dev.vars` (`NEXTJS_ENV=development`).
+`NEXT_PUBLIC_SITE_URL` is **not used** by this app. Set Auth **Site URL** / redirect URLs in the Supabase dashboard instead.
 
-On Cloudflare: set Runtime variables/secrets on the Worker, and the same values under **Build variables and secrets** if using Workers Builds.
+These values are **not** in `wrangler.jsonc` (so keys stay out of git). Set them here:
+
+1. **Runtime (required):** Cloudflare Dashboard → Workers & Pages → `bfa-sms-staging` → **Settings** → **Variables and Secrets**  
+   - Public vars as **Variables**  
+   - `SUPABASE_SERVICE_ROLE_KEY` as a **Secret** only  
+2. **Build (required for Workers Builds / CI):** same names under **Build** → **Build variables and secrets** (`NEXT_PUBLIC_*` must exist during `next build`)  
+3. **Local CLI deploy:** put them in `.env.local` before `npm run deploy` (script uses `--keep-vars` so dashboard secrets are kept)
+
+Local `next dev` continues to use `.env.local`. For Workers preview, copy `.dev.vars.example` → `.dev.vars` (`NEXTJS_ENV=development`); keep Supabase keys in `.env.local`.
 
 ### Local commands
 
