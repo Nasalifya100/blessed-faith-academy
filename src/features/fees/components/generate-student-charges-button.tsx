@@ -2,9 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles } from "lucide-react";
 
 import { generateStudentChargesAction } from "@/features/fees/actions";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface GenerateStudentChargesButtonProps {
   studentId: string;
@@ -44,22 +52,37 @@ export function GenerateStudentChargesButton({
   }
 
   return (
-    <div className="space-y-2">
-      <Button onClick={handleClick} disabled={isPending}>
-        {isPending
-          ? "Generating..."
-          : `Generate charges${termName ? ` for ${termName}` : ""}`}
-      </Button>
-      {message ? (
-        <p className="text-sm text-emerald-600" role="status">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
+    <Card className="shadow-sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Generate charges</CardTitle>
+        <CardDescription>
+          Apply mandatory fee items
+          {termName ? ` for ${termName}` : " for the current term"}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Button
+          onClick={handleClick}
+          disabled={isPending}
+          variant="outline"
+          className="gap-1.5"
+        >
+          <Sparkles className="size-4" aria-hidden />
+          {isPending
+            ? "Generating…"
+            : `Generate charges${termName ? ` for ${termName}` : ""}`}
+        </Button>
+        {message ? (
+          <p className="text-sm text-emerald-700 dark:text-emerald-300" role="status">
+            {message}
+          </p>
+        ) : null}
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

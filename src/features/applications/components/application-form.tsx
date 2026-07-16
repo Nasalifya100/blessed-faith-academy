@@ -23,6 +23,7 @@ import {
   makePrimaryHelper,
 } from "@/features/students/components/guardian-fields";
 import { Button } from "@/components/ui/button";
+import { stickyFormFooterClass } from "@/components/ui/admin-chrome";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
@@ -34,6 +35,14 @@ interface ApplicationFormProps {
 }
 
 const today = () => schoolToday();
+
+function RequiredMark() {
+  return (
+    <span className="text-destructive" aria-hidden>
+      *
+    </span>
+  );
+}
 
 export function ApplicationForm({
   classes,
@@ -108,15 +117,26 @@ export function ApplicationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8" noValidate>
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-          Applicant details
-        </h3>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      className="relative space-y-6 pb-24"
+      noValidate
+    >
+      <section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold tracking-tight">
+            Applicant details
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Fields marked <RequiredMark /> are required.
+          </p>
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="admission_number">Admission number</Label>
+            <Label htmlFor="admission_number">
+              Admission number <RequiredMark />
+            </Label>
             <Input
               id="admission_number"
               aria-invalid={Boolean(errors.admission_number)}
@@ -130,8 +150,13 @@ export function ApplicationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="applied_class_id">Applying for class</Label>
-            <SelectNative id="applied_class_id" {...register("applied_class_id")}>
+            <Label htmlFor="applied_class_id">
+              Applying for class <RequiredMark />
+            </Label>
+            <SelectNative
+              id="applied_class_id"
+              {...register("applied_class_id")}
+            >
               {classes.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.gradeName}
@@ -146,7 +171,9 @@ export function ApplicationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="first_name">First name</Label>
+            <Label htmlFor="first_name">
+              First name <RequiredMark />
+            </Label>
             <Input
               id="first_name"
               aria-invalid={Boolean(errors.first_name)}
@@ -165,7 +192,9 @@ export function ApplicationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="last_name">Last name</Label>
+            <Label htmlFor="last_name">
+              Last name <RequiredMark />
+            </Label>
             <Input
               id="last_name"
               aria-invalid={Boolean(errors.last_name)}
@@ -179,7 +208,9 @@ export function ApplicationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="gender">Gender</Label>
+            <Label htmlFor="gender">
+              Gender <RequiredMark />
+            </Label>
             <SelectNative id="gender" {...register("gender")}>
               {GENDERS.map((value) => (
                 <option key={value} value={value}>
@@ -190,7 +221,9 @@ export function ApplicationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="date_of_birth">Date of birth</Label>
+            <Label htmlFor="date_of_birth">
+              Date of birth <RequiredMark />
+            </Label>
             <Input
               id="date_of_birth"
               type="date"
@@ -206,13 +239,28 @@ export function ApplicationForm({
         </div>
       </section>
 
-      <StudentExtraFields register={register} errors={errors} />
-
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-            Parents / guardians
+      <section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold tracking-tight">
+            Additional student information
           </h3>
+          <p className="text-sm text-muted-foreground">
+            Background and health details for admissions.
+          </p>
+        </div>
+        <StudentExtraFields register={register} errors={errors} />
+      </section>
+
+      <section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold tracking-tight">
+              Parents / guardians
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              At least one primary contact is required.
+            </p>
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -262,11 +310,16 @@ export function ApplicationForm({
         </div>
       </section>
 
-      <section className="space-y-4">
-        <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-          Declaration &amp; consent
-        </h3>
-        <div className="space-y-3 rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+      <section className="space-y-4 rounded-xl border bg-card p-4 shadow-sm sm:p-6">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold tracking-tight">
+            Declaration &amp; consent
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Parent or guardian must agree before submission.
+          </p>
+        </div>
+        <div className="space-y-3 rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
           <p>
             I declare that the information on this form is to the best of my
             knowledge and belief true and correct and that if the child is
@@ -285,7 +338,10 @@ export function ApplicationForm({
             className="mt-0.5 size-4 rounded border-input"
             {...register("consent_agreed")}
           />
-          The parent/guardian has read and agreed to the declaration above.
+          <span>
+            The parent/guardian has read and agreed to the declaration above.{" "}
+            <RequiredMark />
+          </span>
         </label>
         {errors.consent_agreed ? (
           <p className="text-sm text-destructive">
@@ -295,7 +351,9 @@ export function ApplicationForm({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="consent_signed_by">Agreed by (name)</Label>
+            <Label htmlFor="consent_signed_by">
+              Agreed by (name) <RequiredMark />
+            </Label>
             <Input
               id="consent_signed_by"
               aria-invalid={Boolean(errors.consent_signed_by)}
@@ -309,7 +367,9 @@ export function ApplicationForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="consent_signed_at">Date</Label>
+            <Label htmlFor="consent_signed_at">
+              Date <RequiredMark />
+            </Label>
             <Input
               id="consent_signed_at"
               type="date"
@@ -326,7 +386,7 @@ export function ApplicationForm({
 
         <div className="space-y-2">
           <Label htmlFor="emergency_contact_phone">
-            Emergency medical authorization — contact me on
+            Emergency medical authorization — contact me on <RequiredMark />
           </Label>
           <Input
             id="emergency_contact_phone"
@@ -357,9 +417,16 @@ export function ApplicationForm({
         </p>
       ) : null}
 
-      <Button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? "Submitting..." : "Submit application"}
-      </Button>
+      <div className={stickyFormFooterClass}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Submit to place this application in the review queue.
+          </p>
+          <Button type="submit" disabled={isSubmitting} className="sm:min-w-44">
+            {isSubmitting ? "Submitting…" : "Submit application"}
+          </Button>
+        </div>
+      </div>
     </form>
   );
 }

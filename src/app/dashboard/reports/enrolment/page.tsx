@@ -1,5 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  Archive,
+  ArrowLeftRight,
+  UserPlus,
+  Users,
+} from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { getEnrolmentByClassReport } from "@/features/reports/queries";
@@ -8,6 +13,13 @@ import {
   DownloadCsvButton,
   PrintReportButton,
 } from "@/features/reports/components/report-actions";
+import { EnrolmentReportTable } from "@/features/reports/components/enrolment-report-table";
+import {
+  BackLink,
+  PageHeader,
+  PageShell,
+  SectionHeading,
+} from "@/components/layout/page-shell";
 import {
   Card,
   CardContent,
@@ -15,14 +27,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatCard } from "@/components/ui/stat-card";
 
 const REPORT_ROLES = [
   "administrator",
@@ -41,6 +47,8 @@ export default async function EnrolmentReportPage() {
 
   const report = await getEnrolmentByClassReport();
 
+  const classesWithPupils = report.rows.filter((r) => r.enrolledCount > 0).length;
+
   const csv = toCsv(
     ["Class", "Enrolled", "Capacity"],
     report.rows.map((row) => [
@@ -53,76 +61,92 @@ export default async function EnrolmentReportPage() {
   const yearSlug = report.academicYearName ?? "current";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Link
-            href="/dashboard/reports"
-            className="text-sm text-muted-foreground hover:underline print:hidden"
-          >
-            &larr; Back to reports
-          </Link>
-          <h1 className="text-2xl font-bold">Enrolment by class</h1>
-          <p className="text-muted-foreground">
+    <PageShell>
+      <PageHeader
+        eyebrow="Reports"
+        title="Enrolment"
+        description={
+          <>
             Blessed Faith Academy · active enrolments
             {report.academicYearName
               ? ` for ${report.academicYearName}`
               : " for the current year"}
             .
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2 print:hidden">
-          <DownloadCsvButton
-            filename={`enrolment-by-class-${yearSlug}.csv`}
-            csv={csv}
-          />
-          <PrintReportButton />
-        </div>
+          </>
+        }
+        breadcrumb={
+          <BackLink href="/dashboard/reports" className="print:hidden">
+            Back to reports
+          </BackLink>
+        }
+        actions={
+          <div className="flex flex-wrap gap-2 print:hidden">
+            <DownloadCsvButton
+              filename={`enrolment-by-class-${yearSlug}.csv`}
+              csv={csv}
+            />
+            <PrintReportButton />
+          </div>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total students"
+          value={String(report.totalEnrolled)}
+          hint={`${classesWithPupils} class${classesWithPupils === 1 ? "" : "es"} with pupils`}
+          icon={Users}
+          tone="info"
+        />
+        <StatCard
+          title="New admissions"
+          value="—"
+          hint="Not included in this enrolment snapshot"
+          icon={UserPlus}
+        />
+        <StatCard
+          title="Transfers"
+          value="—"
+          hint="Not included in this enrolment snapshot"
+          icon={ArrowLeftRight}
+        />
+        <StatCard
+          title="Archived students"
+          value="—"
+          hint="Not included in this enrolment snapshot"
+          icon={Archive}
+        />
       </div>
 
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle>{report.totalEnrolled} pupils enrolled</CardTitle>
+          <CardTitle>By class</CardTitle>
           <CardDescription>
-            Across {report.rows.length} class
+            {report.totalEnrolled} pupils across {report.rows.length} class
             {report.rows.length === 1 ? "" : "es"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {report.rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No classes found for the current year.
-            </p>
+            <EmptyState
+              title="No enrolment records"
+              description="No classes found for the current academic year."
+              icon={
+                <Users className="size-6 text-muted-foreground" aria-hidden />
+              }
+              size="sm"
+            />
           ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Class</TableHead>
-                    <TableHead className="text-right">Enrolled</TableHead>
-                    <TableHead className="text-right">Capacity</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {report.rows.map((row) => (
-                    <TableRow key={row.classId}>
-                      <TableCell className="font-medium">
-                        {row.className}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.enrolledCount}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
-                        {row.capacity ?? "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              <SectionHeading
+                title="Class enrolment"
+                description="Search classes and review capacity status."
+              />
+              <EnrolmentReportTable rows={report.rows} />
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

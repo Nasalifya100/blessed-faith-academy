@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Percent,
+  UserX,
+} from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { getAttendanceByClassReport } from "@/features/reports/queries";
@@ -8,6 +15,21 @@ import {
   DownloadCsvButton,
   PrintReportButton,
 } from "@/features/reports/components/report-actions";
+import { AttendanceReportTable } from "@/features/reports/components/attendance-report-table";
+import { AttendanceTrendPanel } from "@/features/reports/components/attendance-trend-panel";
+import {
+  ReportFilterBar,
+  ReportFilterField,
+  reportFilterInputClass,
+} from "@/features/reports/components/report-filter-bar";
+import {
+  BackLink,
+  PageHeader,
+  PageShell,
+  SectionHeading,
+} from "@/components/layout/page-shell";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatCard } from "@/components/ui/stat-card";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -16,14 +38,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { schoolToday } from "@/lib/dates";
 
 const REPORT_ROLES = [
   "administrator",
@@ -61,6 +77,32 @@ export default async function AttendanceReportPage({
 
   const report = await getAttendanceByClassReport({ fromDate, toDate });
 
+  const totals = report.rows.reduce(
+    (acc, row) => {
+      acc.present += row.present;
+      acc.absent += row.absent;
+      acc.late += row.late;
+      acc.excused += row.excused;
+      acc.totalMarks += row.totalMarks;
+      return acc;
+    },
+    { present: 0, absent: 0, late: 0, excused: 0, totalMarks: 0 },
+  );
+
+  const attendancePct =
+    totals.totalMarks > 0
+      ? Math.round(((totals.present + totals.late) / totals.totalMarks) * 100)
+      : 0;
+
+  const today = schoolToday();
+  const isTodayOnly =
+    report.fromDate === today && report.toDate === today;
+  const periodHint = isTodayOnly
+    ? "Today"
+    : report.fromDate && report.toDate
+      ? `${report.fromDate} → ${report.toDate}`
+      : "Selected period";
+
   const csv = toCsv(
     [
       "Class",
@@ -87,77 +129,112 @@ export default async function AttendanceReportPage({
   const yearSlug = report.academicYearName ?? "current";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Link
-            href="/dashboard/reports"
-            className="text-sm text-muted-foreground hover:underline print:hidden"
-          >
-            &larr; Back to reports
-          </Link>
-          <h1 className="text-2xl font-bold">Attendance by class</h1>
-          <p className="text-muted-foreground">
+    <PageShell>
+      <PageHeader
+        eyebrow="Reports"
+        title="Attendance"
+        description={
+          <>
             Blessed Faith Academy
             {report.academicYearName ? ` · ${report.academicYearName}` : ""}.
             Rate = (present + late) ÷ all marks.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2 print:hidden">
-          <DownloadCsvButton
-            filename={`attendance-by-class-${yearSlug}.csv`}
-            csv={csv}
-          />
-          <PrintReportButton />
-        </div>
-      </div>
+          </>
+        }
+        breadcrumb={
+          <BackLink href="/dashboard/reports" className="print:hidden">
+            Back to reports
+          </BackLink>
+        }
+        actions={
+          <div className="flex flex-wrap gap-2 print:hidden">
+            <DownloadCsvButton
+              filename={`attendance-by-class-${yearSlug}.csv`}
+              csv={csv}
+            />
+            <PrintReportButton />
+          </div>
+        }
+      />
 
-      <form
-        method="get"
-        action="/dashboard/reports/attendance"
-        className="flex flex-wrap items-end gap-3 rounded-lg border p-4 print:hidden"
-      >
-        <div className="space-y-1">
-          <label htmlFor="from" className="text-xs text-muted-foreground">
-            From
-          </label>
-          <input
-            id="from"
-            name="from"
-            type="date"
-            defaultValue={report.fromDate ?? ""}
-            className="block rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="to" className="text-xs text-muted-foreground">
-            To
-          </label>
-          <input
-            id="to"
-            name="to"
-            type="date"
-            defaultValue={report.toDate ?? ""}
-            className="block rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-          />
-        </div>
-        <button
-          type="submit"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
-        >
-          Apply dates
-        </button>
-        <Link
-          href="/dashboard/reports/attendance"
-          className={buttonVariants({ variant: "ghost", size: "sm" })}
-        >
-          Whole year
-        </Link>
+      <form method="get" action="/dashboard/reports/attendance">
+        <ReportFilterBar label="Attendance date range">
+          <ReportFilterField label="From" htmlFor="from">
+            <input
+              id="from"
+              name="from"
+              type="date"
+              defaultValue={report.fromDate ?? ""}
+              className={reportFilterInputClass}
+            />
+          </ReportFilterField>
+          <ReportFilterField label="To" htmlFor="to">
+            <input
+              id="to"
+              name="to"
+              type="date"
+              defaultValue={report.toDate ?? ""}
+              className={reportFilterInputClass}
+            />
+          </ReportFilterField>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className={cn(buttonVariants({ variant: "default" }), "min-h-11")}
+            >
+              Apply dates
+            </button>
+            <Link
+              href="/dashboard/reports/attendance"
+              className={cn(buttonVariants({ variant: "ghost" }), "min-h-11")}
+            >
+              Whole year
+            </Link>
+          </div>
+        </ReportFilterBar>
       </form>
 
-      <Card>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Attendance %"
+          value={`${attendancePct}%`}
+          hint={periodHint}
+          icon={Percent}
+          tone={
+            attendancePct >= 90
+              ? "success"
+              : attendancePct >= 75
+                ? "warning"
+                : "danger"
+          }
+        />
+        <StatCard
+          title={isTodayOnly ? "Present today" : "Present"}
+          value={String(totals.present)}
+          hint="Marks in range"
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatCard
+          title={isTodayOnly ? "Absent today" : "Absent"}
+          value={String(totals.absent)}
+          hint="Marks in range"
+          icon={UserX}
+          tone="danger"
+        />
+        <StatCard
+          title={isTodayOnly ? "Late today" : "Late"}
+          value={String(totals.late)}
+          hint="Marks in range"
+          icon={Clock3}
+          tone="warning"
+        />
+      </div>
+
+      <AttendanceTrendPanel rows={report.rows} />
+
+      <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle>Summary</CardTitle>
+          <CardTitle>By class</CardTitle>
           <CardDescription>
             {report.fromDate && report.toDate
               ? `${report.fromDate} → ${report.toDate}`
@@ -166,59 +243,28 @@ export default async function AttendanceReportPage({
         </CardHeader>
         <CardContent>
           {report.rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No classes found for the current year.
-            </p>
+            <EmptyState
+              title="No attendance data"
+              description="No classes found for the current year, or no registers fall in this date range."
+              icon={
+                <ClipboardList
+                  className="size-6 text-muted-foreground"
+                  aria-hidden
+                />
+              }
+              size="sm"
+            />
           ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Class</TableHead>
-                    <TableHead className="text-right">Days</TableHead>
-                    <TableHead className="text-right">Present</TableHead>
-                    <TableHead className="text-right">Absent</TableHead>
-                    <TableHead className="text-right">Late</TableHead>
-                    <TableHead className="text-right">Excused</TableHead>
-                    <TableHead className="text-right">Rate</TableHead>
-                    <TableHead className="print:hidden" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {report.rows.map((row) => (
-                    <TableRow key={row.classId}>
-                      <TableCell className="font-medium">
-                        {row.className}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.daysRecorded}
-                      </TableCell>
-                      <TableCell className="text-right">{row.present}</TableCell>
-                      <TableCell className="text-right">{row.absent}</TableCell>
-                      <TableCell className="text-right">{row.late}</TableCell>
-                      <TableCell className="text-right">{row.excused}</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {row.totalMarks === 0 ? "—" : `${row.attendanceRate}%`}
-                      </TableCell>
-                      <TableCell className="text-right print:hidden">
-                        <Link
-                          href={`/dashboard/attendance/${row.classId}`}
-                          className={buttonVariants({
-                            variant: "ghost",
-                            size: "sm",
-                          })}
-                        >
-                          Register
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              <SectionHeading
+                title="Class breakdown"
+                description="Search and open a register from any row."
+              />
+              <AttendanceReportTable rows={report.rows} />
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

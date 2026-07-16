@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { GraduationCap, Plus, Search, Users } from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import {
+  canBrowseStudents,
+  canManageStudents,
+} from "@/features/auth/permissions";
 import {
   getCurrentYearClasses,
   listStudents,
@@ -10,28 +15,37 @@ import {
   STUDENT_STATUSES,
   STUDENT_STATUS_LABELS,
 } from "@/features/students/schemas";
-import { StudentStatusBadge } from "@/features/students/components/status-badge";
+import { StudentsTable } from "@/features/students/components/students-table";
+import { PageHeader, PageShell } from "@/components/layout/page-shell";
+import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SelectNative } from "@/components/ui/select-native";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-
-import {
-  canBrowseStudents,
-  canManageStudents,
-} from "@/features/auth/permissions";
+import { cn } from "@/lib/utils";
 
 function firstValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
+}
+
+function chipClass(active: boolean) {
+  return cn(
+    buttonVariants({ variant: active ? "default" : "outline", size: "sm" }),
+    "min-h-10 rounded-full px-4",
+  );
+}
+
+function buildStudentsHref(opts: {
+  q: string;
+  status: string | null;
+  classId: string;
+}): string {
+  const sp = new URLSearchParams();
+  if (opts.q) sp.set("q", opts.q);
+  if (opts.status !== null) sp.set("status", opts.status);
+  if (opts.classId) sp.set("class", opts.classId);
+  const qs = sp.toString();
+  return qs ? `/dashboard/students?${qs}` : "/dashboard/students";
 }
 
 export default async function StudentsPage({
@@ -45,6 +59,7 @@ export default async function StudentsPage({
   const statusFilterUnset = params.status === undefined;
   const status = statusFilterUnset ? "enrolled" : statusParam;
   const classId = firstValue(params.class);
+  const showingAllStatuses = !statusFilterUnset && status === "";
 
   const current = await getCurrentUser();
   const role = current?.profile?.role;
@@ -61,72 +76,64 @@ export default async function StudentsPage({
   const hasFilters = Boolean(q || !statusFilterUnset || classId);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Students</h1>
-          <p className="text-muted-foreground">
-            {students.length} student{students.length === 1 ? "" : "s"}
-            {hasFilters ? " match your filters" : ""}.
-          </p>
-        </div>
-        {canManage ? (
-          <Link href="/dashboard/students/new" className={buttonVariants()}>
-            Add student
-          </Link>
-        ) : null}
-      </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Students"
+        title="Directory"
+        description={
+          <>
+            <span className="font-medium text-foreground">
+              {students.length}
+            </span>{" "}
+            student{students.length === 1 ? "" : "s"}
+            {hasFilters ? " match your filters" : " in view"}
+          </>
+        }
+        actions={
+          canManage ? (
+            <Link
+              href="/dashboard/students/new"
+              className={cn(buttonVariants(), "gap-2")}
+            >
+              <Plus className="size-4" aria-hidden />
+              Add student
+            </Link>
+          ) : null
+        }
+      />
 
-      <form
-        method="get"
-        action="/dashboard/students"
-        className="grid gap-4 rounded-lg border p-4 sm:grid-cols-[1fr_auto_auto_auto]"
+      <section
+        aria-label="Search and filters"
+        className="space-y-4 rounded-xl border bg-card p-4 shadow-sm"
       >
-        <div className="space-y-2">
-          <Label htmlFor="q">Search</Label>
-          <Input
-            id="q"
-            name="q"
-            defaultValue={q}
-            placeholder="Name or admission number"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <SelectNative
-            id="status"
-            name="status"
-            defaultValue={statusFilterUnset ? "enrolled" : status}
-            className="w-40"
-          >
-            <option value="">All statuses</option>
-            {STUDENT_STATUSES.map((value) => (
-              <option key={value} value={value}>
-                {STUDENT_STATUS_LABELS[value]}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="class">Class</Label>
-          <SelectNative
-            id="class"
-            name="class"
-            defaultValue={classId}
-            className="w-40"
-          >
-            <option value="">All classes</option>
-            {classes.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.gradeName}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
-
-        <div className="flex items-end gap-2">
+        <form
+          method="get"
+          action="/dashboard/students"
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+        >
+          <div className="min-w-0 flex-1 space-y-2">
+            <Label htmlFor="q">Search</Label>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                id="q"
+                name="q"
+                defaultValue={q}
+                placeholder="Name or admission number"
+                className="pl-9"
+              />
+            </div>
+          </div>
+          {!showingAllStatuses && status ? (
+            <input type="hidden" name="status" value={status} />
+          ) : null}
+          {showingAllStatuses ? (
+            <input type="hidden" name="status" value="" />
+          ) : null}
+          {classId ? <input type="hidden" name="class" value={classId} /> : null}
           <button type="submit" className={buttonVariants()}>
             Search
           </button>
@@ -138,57 +145,131 @@ export default async function StudentsPage({
               Clear
             </Link>
           ) : null}
+        </form>
+
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Status
+            </p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Status filters">
+              <Link
+                href={buildStudentsHref({ q, status: "", classId })}
+                className={chipClass(showingAllStatuses)}
+                aria-current={showingAllStatuses ? "page" : undefined}
+              >
+                All
+              </Link>
+              {STUDENT_STATUSES.map((value) => {
+                const isActive =
+                  !showingAllStatuses &&
+                  ((statusFilterUnset && value === "enrolled") ||
+                    status === value);
+                return (
+                  <Link
+                    key={value}
+                    href={buildStudentsHref({ q, status: value, classId })}
+                    className={chipClass(isActive)}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    {STUDENT_STATUS_LABELS[value]}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Class / grade
+            </p>
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Class filters"
+            >
+              <Link
+                href={buildStudentsHref({
+                  q,
+                  status: showingAllStatuses
+                    ? ""
+                    : statusFilterUnset
+                      ? "enrolled"
+                      : status,
+                  classId: "",
+                })}
+                className={chipClass(!classId)}
+                aria-current={!classId ? "page" : undefined}
+              >
+                All classes
+              </Link>
+              {classes.map((option) => {
+                const active = classId === option.id;
+                return (
+                  <Link
+                    key={option.id}
+                    href={buildStudentsHref({
+                      q,
+                      status: showingAllStatuses
+                        ? ""
+                        : statusFilterUnset
+                          ? "enrolled"
+                          : status,
+                      classId: option.id,
+                    })}
+                    className={chipClass(active)}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    {option.gradeName}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      </form>
+      </section>
 
       {students.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No students found{hasFilters ? " for these filters" : " yet"}.
-        </p>
+        <EmptyState
+          size="lg"
+          title={hasFilters ? "No students match" : "No students yet"}
+          description={
+            hasFilters
+              ? "Try clearing filters or searching with a different name or admission number."
+              : "Enrol the first pupil to start building your school directory."
+          }
+          icon={
+            hasFilters ? (
+              <Users className="size-7 text-muted-foreground" aria-hidden />
+            ) : (
+              <GraduationCap
+                className="size-7 text-muted-foreground"
+                aria-hidden
+              />
+            )
+          }
+          action={
+            canManage && !hasFilters ? (
+              <Link
+                href="/dashboard/students/new"
+                className={cn(buttonVariants(), "gap-2")}
+              >
+                <Plus className="size-4" aria-hidden />
+                Add student
+              </Link>
+            ) : hasFilters ? (
+              <Link
+                href="/dashboard/students"
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Clear filters
+              </Link>
+            ) : null
+          }
+        />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Admission #</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Class</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((student) => (
-                <TableRow key={student.id}>
-                  <TableCell className="font-mono text-xs">
-                    {student.admissionNumber}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/dashboard/students/${student.id}`}
-                      className="hover:underline"
-                    >
-                      {student.fullName}
-                    </Link>
-                  </TableCell>
-                  <TableCell>{student.className ?? "-"}</TableCell>
-                  <TableCell>
-                    <StudentStatusBadge status={student.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link
-                      href={`/dashboard/students/${student.id}`}
-                      className="text-sm hover:underline"
-                    >
-                      View
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <StudentsTable students={students} />
       )}
-    </div>
+    </PageShell>
   );
 }

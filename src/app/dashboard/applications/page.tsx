@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ClipboardList, Plus } from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { canManageApplications } from "@/features/auth/permissions";
@@ -8,33 +9,23 @@ import {
   APPLICATION_STATUSES,
   APPLICATION_STATUS_LABELS,
 } from "@/features/applications/schemas";
-import { ApplicationStatusBadge } from "@/features/applications/components/application-status-badge";
+import { ApplicationsWorkspace } from "@/features/applications/components/applications-workspace";
+import { getCurrentYearClasses } from "@/features/students/queries";
+import { PageHeader, PageShell } from "@/components/layout/page-shell";
+import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { SelectNative } from "@/components/ui/select-native";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 function firstValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function buildHref(status: string | null): string {
+  if (status === null) return "/dashboard/applications";
+  const sp = new URLSearchParams();
+  sp.set("status", status);
+  return `/dashboard/applications?${sp.toString()}`;
 }
 
 export default async function ApplicationsPage({
@@ -43,112 +34,127 @@ export default async function ApplicationsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  // Default to showing submitted applications (those awaiting review).
-  const status = params.status === undefined ? "submitted" : firstValue(params.status);
+  const statusFilterUnset = params.status === undefined;
+  const statusParam = firstValue(params.status);
+  const status = statusFilterUnset ? "submitted" : statusParam;
+  const showingAll = !statusFilterUnset && status === "";
 
   const current = await getCurrentUser();
   const role = current?.profile?.role;
   if (!canManageApplications(role)) {
     redirect("/dashboard");
   }
-  const canManage = true;
 
-  const applications = await listApplications(status || undefined);
+  const [applications, pendingQueue, { classes }] = await Promise.all([
+    listApplications(showingAll ? undefined : status || undefined),
+    listApplications("submitted"),
+    getCurrentYearClasses(),
+  ]);
+
+  const pendingCount = pendingQueue.length;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Applications</h1>
-          <p className="text-muted-foreground">
-            {applications.length} application
-            {applications.length === 1 ? "" : "s"}.
-          </p>
-        </div>
-        {canManage ? (
+    <PageShell>
+      <PageHeader
+        eyebrow="Admissions"
+        title="Applications"
+        description={
+          <>
+            <span className="font-medium text-foreground">
+              {applications.length}
+            </span>{" "}
+            in this queue
+            {" · "}
+            <span className="font-medium text-foreground">{pendingCount}</span>{" "}
+            pending approval
+          </>
+        }
+        actions={
           <Link
             href="/dashboard/applications/new"
-            className={buttonVariants()}
+            className={cn(buttonVariants(), "gap-2")}
           >
+            <Plus className="size-4" aria-hidden />
             New application
           </Link>
-        ) : null}
-      </div>
+        }
+      />
 
-      <form
-        method="get"
-        action="/dashboard/applications"
-        className="flex flex-wrap items-end gap-3 rounded-lg border p-4"
+      <section
+        aria-label="Status filters"
+        className="flex flex-wrap gap-2 rounded-xl border bg-card p-3 shadow-sm"
       >
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <SelectNative
-            id="status"
-            name="status"
-            defaultValue={status}
-            className="w-48"
-          >
-            <option value="">All statuses</option>
-            {APPLICATION_STATUSES.map((value) => (
-              <option key={value} value={value}>
+        <Link
+          href={buildHref("")}
+          className={cn(
+            buttonVariants({
+              variant: showingAll ? "default" : "outline",
+              size: "sm",
+            }),
+            "rounded-full",
+          )}
+          aria-current={showingAll ? "page" : undefined}
+        >
+          All
+        </Link>
+        {APPLICATION_STATUSES.filter((value) => value !== "withdrawn").map(
+          (value) => {
+            const isActive =
+              !showingAll &&
+              ((statusFilterUnset && value === "submitted") ||
+                status === value);
+            return (
+              <Link
+                key={value}
+                href={buildHref(value)}
+                className={cn(
+                  buttonVariants({
+                    variant: isActive ? "default" : "outline",
+                    size: "sm",
+                  }),
+                  "rounded-full",
+                )}
+                aria-current={isActive ? "page" : undefined}
+              >
                 {APPLICATION_STATUS_LABELS[value]}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
-        <button type="submit" className={buttonVariants()}>
-          Filter
-        </button>
-      </form>
+                {value === "submitted" ? (
+                  <span className="ml-1.5 rounded-full bg-background/20 px-1.5 text-xs tabular-nums">
+                    {pendingCount}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          },
+        )}
+      </section>
 
       {applications.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No applications found.</p>
+        <EmptyState
+          size="lg"
+          title="No applications in this queue"
+          description="Start a new application, or switch status filters to review other queues."
+          icon={
+            <ClipboardList
+              className="size-7 text-muted-foreground"
+              aria-hidden
+            />
+          }
+          action={
+            <Link
+              href="/dashboard/applications/new"
+              className={cn(buttonVariants(), "gap-2")}
+            >
+              <Plus className="size-4" aria-hidden />
+              New application
+            </Link>
+          }
+        />
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Applicant</TableHead>
-                <TableHead>Admission #</TableHead>
-                <TableHead>Applying for</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {applications.map((application) => (
-                <TableRow key={application.id}>
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/dashboard/applications/${application.id}`}
-                      className="hover:underline"
-                    >
-                      {application.applicantName || "(unnamed)"}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {application.admissionNumber}
-                  </TableCell>
-                  <TableCell>{application.appliedClassName ?? "-"}</TableCell>
-                  <TableCell>
-                    <ApplicationStatusBadge status={application.status} />
-                  </TableCell>
-                  <TableCell>{formatDate(application.submittedAt)}</TableCell>
-                  <TableCell className="text-right">
-                    <Link
-                      href={`/dashboard/applications/${application.id}`}
-                      className="text-sm hover:underline"
-                    >
-                      Review
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <ApplicationsWorkspace
+          applications={applications}
+          classOptions={classes}
+        />
       )}
-    </div>
+    </PageShell>
   );
 }

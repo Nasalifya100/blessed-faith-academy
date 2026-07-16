@@ -2,11 +2,19 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Plus } from "lucide-react";
 
 import { optInOptionalFeesAction } from "@/features/fees/actions";
 import type { OptionalFeeOption } from "@/features/fees/queries";
 import { formatKwacha } from "@/lib/money";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface OptionalFeesOptInFormProps {
   studentId: string;
@@ -92,167 +100,206 @@ export function OptionalFeesOptInForm({
   if (chargedUniforms.length > 0) {
     statusLines.push(
       chargedUniforms.length === 1
-        ? `Uniform on statement: ${chargedUniforms[0].name}.`
+        ? `Uniform on statement: ${chargedUniforms[0]!.name}.`
         : `${chargedUniforms.length} uniform items are on the statement.`,
     );
   }
 
+  const addLabel =
+    canAddMeal && canAddUniform
+      ? "Add meals / uniforms"
+      : canAddMeal
+        ? "Add meal plan"
+        : "Add uniforms";
+
   if (!canAddAnything) {
     return (
-      <div className="space-y-1 text-sm text-muted-foreground">
-        {statusLines.length > 0 ? (
-          statusLines.map((line) => <p key={line}>{line}</p>)
-        ) : (
-          <p>No optional meal or uniform items are set up yet.</p>
-        )}
-        {hasMealAlready && uniforms.length > 0 && availableUniforms.length === 0 ? (
-          <p>All listed uniforms are already on this statement.</p>
-        ) : null}
-        {hasMealAlready ? (
-          <p>
-            To change meal plan, remove the meal line on the statement below,
-            then add a new one.
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Optional charges</CardTitle>
+          <CardDescription>
+            Meal and uniform add-ons for this student.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          {statusLines.length > 0 ? (
+            statusLines.map((line) => <p key={line}>{line}</p>)
+          ) : (
+            <p>No optional meal or uniform items are set up yet.</p>
+          )}
+          {hasMealAlready &&
+          uniforms.length > 0 &&
+          availableUniforms.length === 0 ? (
+            <p>All listed uniforms are already on this statement.</p>
+          ) : null}
+          {hasMealAlready ? (
+            <p>
+              To change meal plan, cancel the meal line on the Charges tab,
+              then add a new one.
+            </p>
+          ) : null}
+          <p className="text-xs">
+            Add is unavailable — there is nothing left to opt in under the
+            current rules.
           </p>
-        ) : null}
-      </div>
+        </CardContent>
+      </Card>
     );
   }
 
   if (!open) {
     return (
-      <div className="space-y-2">
-        {statusLines.map((line) => (
-          <p key={line} className="text-sm text-muted-foreground">
-            {line}
-          </p>
-        ))}
-        {hasMealAlready ? (
-          <p className="text-xs text-muted-foreground">
-            To switch meal plan, remove the current meal charge on the statement
-            first.
-          </p>
-        ) : null}
-        <Button type="button" variant="outline" onClick={() => setOpen(true)}>
-          {canAddMeal && canAddUniform
-            ? "Add meals / uniforms"
-            : canAddMeal
-              ? "Add meal plan"
-              : "Add uniforms"}
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          Meals are charged per term
-          {termName ? ` (${termName})` : ""}; uniforms once per year.
-        </p>
-      </div>
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Optional charges</CardTitle>
+          <CardDescription>
+            Meals are charged per term
+            {termName ? ` (${termName})` : ""}; uniforms once per year.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {statusLines.map((line) => (
+            <p key={line} className="text-sm text-muted-foreground">
+              {line}
+            </p>
+          ))}
+          {hasMealAlready ? (
+            <p className="text-xs text-muted-foreground">
+              To switch meal plan, cancel the current meal charge on the Charges
+              tab first.
+            </p>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => setOpen(true)}
+          >
+            <Plus className="size-4" aria-hidden />
+            {addLabel}
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-4 rounded-lg border p-4"
-      noValidate
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium">
-          {canAddMeal && canAddUniform
-            ? "Add meals / uniforms"
-            : canAddMeal
-              ? "Add meal plan"
-              : "Add uniforms"}
-        </h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </Button>
-      </div>
+    <form onSubmit={onSubmit} className="space-y-0" noValidate>
+      <Card className="shadow-sm">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div className="space-y-1">
+            <CardTitle className="text-base">{addLabel}</CardTitle>
+            <CardDescription>
+              Select optional items to add to this student&apos;s statement.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(false)}
+          >
+            Close
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {statusLines.length > 0 ? (
+            <div className="space-y-1 rounded-xl border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              {statusLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          ) : null}
 
-      {statusLines.length > 0 ? (
-        <div className="space-y-1 text-sm text-muted-foreground">
-          {statusLines.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
-      ) : null}
+          {canAddMeal ? (
+            <fieldset className="space-y-2 rounded-xl border p-3">
+              <legend className="px-1 text-sm font-medium">
+                Meal plan (pick one)
+              </legend>
+              <p className="text-xs text-muted-foreground">
+                Charged for {termName ?? "the current term"}.
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="meal"
+                  value=""
+                  checked={mealId === ""}
+                  onChange={() => setMealId("")}
+                  className="size-4"
+                />
+                None
+              </label>
+              {meals.map((meal) => (
+                <label
+                  key={meal.id}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="radio"
+                    name="meal"
+                    value={meal.id}
+                    checked={mealId === meal.id}
+                    disabled={meal.amount <= 0}
+                    onChange={() => setMealId(meal.id)}
+                    className="size-4"
+                  />
+                  <span>
+                    {meal.name} — {formatKwacha(meal.amount)}
+                    {meal.amount <= 0 ? " (unavailable)" : ""}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
 
-      {canAddMeal ? (
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">Meal plan (pick one)</legend>
-          <p className="text-xs text-muted-foreground">
-            Charged for {termName ?? "the current term"}.
-          </p>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="meal"
-              value=""
-              checked={mealId === ""}
-              onChange={() => setMealId("")}
-            />
-            None
-          </label>
-          {meals.map((meal) => (
-            <label key={meal.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="meal"
-                value={meal.id}
-                checked={mealId === meal.id}
-                disabled={meal.amount <= 0}
-                onChange={() => setMealId(meal.id)}
-              />
-              <span>
-                {meal.name} — {formatKwacha(meal.amount)}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      ) : null}
+          {canAddUniform ? (
+            <fieldset className="space-y-2 rounded-xl border p-3">
+              <legend className="px-1 text-sm font-medium">Uniforms</legend>
+              <p className="text-xs text-muted-foreground">
+                Select any items not yet charged this year.
+              </p>
+              {availableUniforms.map((item) => (
+                <label
+                  key={item.id}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={uniformIds.includes(item.id)}
+                    disabled={item.amount <= 0}
+                    onChange={() => toggleUniform(item.id)}
+                    className="size-4 rounded border-input"
+                  />
+                  <span>
+                    {item.name} — {formatKwacha(item.amount)}
+                    {item.amount <= 0 ? " (unavailable)" : ""}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : uniforms.length > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              All listed uniforms are already on this statement.
+            </p>
+          ) : null}
 
-      {canAddUniform ? (
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">Uniforms</legend>
-          <p className="text-xs text-muted-foreground">
-            Select any items not yet charged this year.
-          </p>
-          {availableUniforms.map((item) => (
-            <label key={item.id} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={uniformIds.includes(item.id)}
-                disabled={item.amount <= 0}
-                onChange={() => toggleUniform(item.id)}
-              />
-              <span>
-                {item.name} — {formatKwacha(item.amount)}
-              </span>
-            </label>
-          ))}
-        </fieldset>
-      ) : uniforms.length > 0 ? (
-        <p className="text-sm text-muted-foreground">
-          All listed uniforms are already on this statement.
-        </p>
-      ) : null}
+          {serverError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {serverError}
+            </p>
+          ) : null}
 
-      {serverError ? (
-        <p className="text-sm text-destructive" role="alert">
-          {serverError}
-        </p>
-      ) : null}
-
-      <Button
-        type="submit"
-        disabled={
-          isSubmitting || (!mealId && uniformIds.length === 0)
-        }
-      >
-        {isSubmitting ? "Adding..." : "Add to statement"}
-      </Button>
+          <Button
+            type="submit"
+            disabled={isSubmitting || (!mealId && uniformIds.length === 0)}
+            className="gap-1.5"
+          >
+            <Plus className="size-4" aria-hidden />
+            {isSubmitting ? "Adding…" : "Add to statement"}
+          </Button>
+        </CardContent>
+      </Card>
     </form>
   );
 }

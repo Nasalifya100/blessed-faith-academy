@@ -1,5 +1,7 @@
 "use client";
 
+import { Download, Printer } from "lucide-react";
+
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,9 +17,15 @@ export function PrintReportButton({
   return (
     <button
       type="button"
-      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "print:hidden", className)}
+      className={cn(
+        buttonVariants({ variant: "outline", size: "sm" }),
+        "print:hidden",
+        className,
+      )}
       onClick={() => window.print()}
+      aria-label={label}
     >
+      <Printer className="size-4" aria-hidden />
       {label}
     </button>
   );
@@ -33,7 +41,7 @@ interface DownloadCsvButtonProps {
 export function DownloadCsvButton({
   filename,
   csv,
-  label = "Download CSV",
+  label = "Export CSV",
   className,
 }: DownloadCsvButtonProps) {
   function onDownload() {
@@ -49,9 +57,15 @@ export function DownloadCsvButton({
   return (
     <button
       type="button"
-      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "print:hidden", className)}
+      className={cn(
+        buttonVariants({ variant: "outline", size: "sm" }),
+        "print:hidden",
+        className,
+      )}
       onClick={onDownload}
+      aria-label={label}
     >
+      <Download className="size-4" aria-hidden />
       {label}
     </button>
   );

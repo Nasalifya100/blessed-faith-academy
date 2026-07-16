@@ -1,24 +1,17 @@
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { APPLICATION_STATUS_LABELS } from "@/features/applications/schemas";
 
-type BadgeVariant =
-  | "default"
-  | "secondary"
-  | "destructive"
-  | "success"
-  | "outline";
-
-const STATUS_VARIANT: Record<string, BadgeVariant> = {
-  submitted: "secondary",
+const STATUS_TONE: Record<string, StatusTone> = {
+  draft: "neutral",
+  submitted: "warning",
   approved: "success",
-  rejected: "destructive",
-  draft: "outline",
-  withdrawn: "outline",
+  rejected: "danger",
+  withdrawn: "neutral",
 };
 
 export function ApplicationStatusBadge({ status }: { status: string }) {
   const label =
     (APPLICATION_STATUS_LABELS as Record<string, string>)[status] ?? status;
-  const variant = STATUS_VARIANT[status] ?? "outline";
-  return <Badge variant={variant}>{label}</Badge>;
+  const tone = STATUS_TONE[status] ?? "neutral";
+  return <StatusBadge tone={tone}>{label}</StatusBadge>;
 }

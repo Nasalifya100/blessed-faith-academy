@@ -5,14 +5,13 @@ import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { listSchoolDisciplineIncidents } from "@/features/discipline/queries";
 import type { DisciplineStatus } from "@/features/discipline/schemas";
 import { SchoolDisciplineList } from "@/features/discipline/components/school-discipline-list";
-import { buttonVariants } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  BackLink,
+  PageHeader,
+  PageShell,
+} from "@/components/layout/page-shell";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const VIEWER_ROLES = [
   "administrator",
@@ -42,7 +41,9 @@ export default async function DisciplinePage({
   const params = await searchParams;
   const statusParam = firstValue(params.status) || "open";
   const statusFilter =
-    statusParam === "all" || statusParam === "resolved" || statusParam === "open"
+    statusParam === "all" ||
+    statusParam === "resolved" ||
+    statusParam === "open"
       ? statusParam
       : "open";
 
@@ -50,72 +51,39 @@ export default async function DisciplinePage({
     current?.profile?.is_active && RESOLVE_ROLES.includes(role),
   );
 
+  // Load full list once (existing query) so overview StatCards can use open + resolved.
   const incidents = await listSchoolDisciplineIncidents({
-    status: statusFilter as DisciplineStatus | "all",
+    status: "all",
+    limit: 100,
   });
 
-  const filters: { value: string; label: string }[] = [
-    { value: "open", label: "Open" },
-    { value: "resolved", label: "Resolved" },
-    { value: "all", label: "All" },
-  ];
-
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Discipline</h1>
-          <p className="text-muted-foreground">
-            School-wide incident list. Record new incidents from a student
-            profile.
-          </p>
-        </div>
-        <Link
-          href="/dashboard/rules"
-          className={buttonVariants({ variant: "outline" })}
-        >
-          School rules
-        </Link>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {filters.map((filter) => (
+    <PageShell>
+      <PageHeader
+        eyebrow="Operations"
+        title="Discipline"
+        description="See open cases, what needs action, and resolve incidents. Record new cases from a student profile."
+        breadcrumb={
+          <BackLink href="/dashboard" className="print:hidden">
+            Back to dashboard
+          </BackLink>
+        }
+        actions={
           <Link
-            key={filter.value}
-            href={`/dashboard/discipline?status=${filter.value}`}
-            className={buttonVariants({
-              variant: statusFilter === filter.value ? "default" : "outline",
-              size: "sm",
-            })}
+            href="/dashboard/rules"
+            className={cn(buttonVariants({ variant: "outline" }))}
           >
-            {filter.label}
+            School rules
           </Link>
-        ))}
-      </div>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {statusFilter === "open"
-              ? "Open incidents"
-              : statusFilter === "resolved"
-                ? "Resolved incidents"
-                : "All incidents"}
-          </CardTitle>
-          <CardDescription>
-            {incidents.length} shown
-            {canResolve && statusFilter !== "resolved"
-              ? " · Resolve from here or on the student profile"
-              : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SchoolDisciplineList
-            incidents={incidents}
-            canResolve={canResolve}
-          />
-        </CardContent>
-      </Card>
-    </div>
+      <SchoolDisciplineList
+        key={statusFilter}
+        incidents={incidents}
+        canResolve={canResolve}
+        initialStatus={statusFilter as DisciplineStatus | "all"}
+      />
+    </PageShell>
   );
 }

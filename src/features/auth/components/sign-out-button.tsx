@@ -19,8 +19,13 @@ export function SignOutButton() {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={handleSignOut} disabled={loading}>
-      {loading ? "Signing out..." : "Sign out"}
+    <Button
+      variant="outline"
+      className="min-h-10"
+      onClick={handleSignOut}
+      disabled={loading}
+    >
+      {loading ? "Signing out…" : "Sign out"}
     </Button>
   );
 }

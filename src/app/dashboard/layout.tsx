@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
@@ -7,6 +6,10 @@ import {
   canManageApplications,
 } from "@/features/auth/permissions";
 import { ROLE_LABELS } from "@/features/auth/types";
+import {
+  DashboardNav,
+  type DashboardNavLink,
+} from "@/features/dashboard/components/dashboard-nav";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 
 export default async function DashboardLayout({
@@ -19,7 +22,6 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Authenticated but no profile — cannot use the app until staff is set up.
   if (!current.profileLoadFailed && !current.profile) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
@@ -35,7 +37,6 @@ export default async function DashboardLayout({
     );
   }
 
-  // A deactivated staff member keeps a valid session but must not use the app.
   if (current.profile && !current.profile.is_active) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 text-center">
@@ -96,72 +97,41 @@ export default async function DashboardLayout({
       ].includes(current.profile.role),
   );
 
+  const links: DashboardNavLink[] = [
+    { href: "/dashboard", label: "Dashboard" },
+    ...(canSeeStudents
+      ? [{ href: "/dashboard/students", label: "Students" }]
+      : []),
+    ...(canSeeApplications
+      ? [{ href: "/dashboard/applications", label: "Applications" }]
+      : []),
+    ...(canSeeAttendance
+      ? [{ href: "/dashboard/attendance", label: "Attendance" }]
+      : []),
+    ...(canSeeFees ? [{ href: "/dashboard/fees", label: "Fees" }] : []),
+    ...(canSeeRules ? [{ href: "/dashboard/rules", label: "Rules" }] : []),
+    ...(canSeeDiscipline
+      ? [{ href: "/dashboard/discipline", label: "Discipline" }]
+      : []),
+    ...(canSeeReports
+      ? [{ href: "/dashboard/reports", label: "Reports" }]
+      : []),
+    ...(isAdmin ? [{ href: "/dashboard/staff", label: "Staff" }] : []),
+    ...(isAdmin ? [{ href: "/dashboard/settings", label: "Settings" }] : []),
+  ];
+
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3 print:hidden">
-        <div>
+      <header className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 print:hidden">
+        <div className="min-w-0">
           <p className="font-semibold">Blessed Faith Academy</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {displayName} &middot; {roleLabel}
           </p>
         </div>
-        <nav className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-sm hover:underline">
-            Dashboard
-          </Link>
-          {canSeeStudents ? (
-            <Link href="/dashboard/students" className="text-sm hover:underline">
-              Students
-            </Link>
-          ) : null}
-          {canSeeApplications ? (
-            <Link
-              href="/dashboard/applications"
-              className="text-sm hover:underline"
-            >
-              Applications
-            </Link>
-          ) : null}
-          {canSeeAttendance ? (
-            <Link
-              href="/dashboard/attendance"
-              className="text-sm hover:underline"
-            >
-              Attendance
-            </Link>
-          ) : null}
-          {canSeeFees ? (
-            <Link href="/dashboard/fees" className="text-sm hover:underline">
-              Fees
-            </Link>
-          ) : null}
-          {canSeeRules ? (
-            <Link href="/dashboard/rules" className="text-sm hover:underline">
-              Rules
-            </Link>
-          ) : null}
-          {canSeeDiscipline ? (
-            <Link
-              href="/dashboard/discipline"
-              className="text-sm hover:underline"
-            >
-              Discipline
-            </Link>
-          ) : null}
-          {canSeeReports ? (
-            <Link href="/dashboard/reports" className="text-sm hover:underline">
-              Reports
-            </Link>
-          ) : null}
-          {isAdmin ? (
-            <Link href="/dashboard/staff" className="text-sm hover:underline">
-              Staff
-            </Link>
-          ) : null}
-          <SignOutButton />
-        </nav>
+        <DashboardNav links={links} />
       </header>
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1 p-4 sm:p-6">{children}</main>
     </div>
   );
 }

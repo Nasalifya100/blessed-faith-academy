@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
@@ -8,6 +7,15 @@ import {
 } from "@/features/attendance/queries";
 import { AttendanceRegisterForm } from "@/features/attendance/components/attendance-register-form";
 import { AttendanceDaySummary } from "@/features/attendance/components/attendance-day-summary";
+import {
+  BackLink,
+  PageHeader,
+  PageShell,
+} from "@/components/layout/page-shell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Card,
   CardContent,
@@ -27,6 +35,17 @@ const ATTENDANCE_ROLES = [
 function firstValue(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? "";
   return value ?? "";
+}
+
+function formatDateLabel(isoDate: string): string {
+  const date = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return isoDate;
+  return date.toLocaleDateString("en-ZM", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default async function ClassAttendancePage({
@@ -51,7 +70,8 @@ export default async function ClassAttendancePage({
       : schoolToday();
 
   const { items: allowed } = await listClassesForAttendance();
-  if (!allowed.some((cls) => cls.id === classId)) {
+  const access = allowed.find((cls) => cls.id === classId);
+  if (!access) {
     notFound();
   }
 
@@ -60,28 +80,72 @@ export default async function ClassAttendancePage({
     notFound();
   }
 
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-2">
-        <Link
-          href="/dashboard/attendance"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to attendance
-        </Link>
-        <h1 className="text-2xl font-bold">{register.gradeName}</h1>
-        <p className="text-muted-foreground">
-          Daily register · {register.summary.total} enrolled student
-          {register.summary.total === 1 ? "" : "s"}
-        </p>
-      </div>
+  const savedCount = register.students.filter((s) => s.hasExistingMark).length;
+  const isComplete =
+    savedCount === register.summary.total && register.summary.total > 0;
 
-      <Card>
+  const teacherLabel =
+    access.accessReason === "cover"
+      ? "Cover teacher (you)"
+      : access.homeroomTeacherName
+        ? `Homeroom: ${access.homeroomTeacherName}`
+        : "Homeroom teacher not set";
+
+  return (
+    <PageShell>
+      <PageHeader
+        eyebrow="Attendance"
+        title={register.gradeName}
+        description={
+          <div className="space-y-2">
+            <p>
+              {register.className !== register.gradeName
+                ? `${register.className} · `
+                : null}
+              {formatDateLabel(attendanceDate)}
+            </p>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <StatusBadge
+                tone={
+                  access.accessReason === "cover"
+                    ? "warning"
+                    : access.accessReason === "homeroom"
+                      ? "success"
+                      : "info"
+                }
+              >
+                {access.accessReason === "cover"
+                  ? "Cover"
+                  : access.accessReason === "homeroom"
+                    ? "Homeroom"
+                    : "Office"}
+              </StatusBadge>
+              <span className="text-muted-foreground">{teacherLabel}</span>
+              <span className="text-muted-foreground">
+                · {register.summary.total} student
+                {register.summary.total === 1 ? "" : "s"}
+              </span>
+              {isComplete ? (
+                <StatusBadge tone="success">Saved</StatusBadge>
+              ) : savedCount > 0 ? (
+                <StatusBadge tone="warning">Partially saved</StatusBadge>
+              ) : (
+                <StatusBadge tone="neutral">Not saved</StatusBadge>
+              )}
+            </div>
+          </div>
+        }
+        breadcrumb={
+          <BackLink href="/dashboard/attendance">Back to attendance</BackLink>
+        }
+      />
+
+      <Card className="shadow-sm">
         <CardHeader>
-          <CardTitle>Register for {attendanceDate}</CardTitle>
+          <CardTitle>Daily register</CardTitle>
           <CardDescription>
-            Change the date to view or edit another day. Defaults to present for
-            students not yet marked.
+            Tap a status for each student, then save. Change the date to view or
+            edit another day.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -90,24 +154,19 @@ export default async function ClassAttendancePage({
             action={`/dashboard/attendance/${classId}`}
             className="flex flex-wrap items-end gap-3"
           >
-            <div className="space-y-1">
-              <label htmlFor="date" className="text-xs text-muted-foreground">
-                Date
-              </label>
-              <input
+            <div className="space-y-1.5">
+              <Label htmlFor="date">Date</Label>
+              <Input
                 id="date"
                 name="date"
                 type="date"
                 defaultValue={attendanceDate}
-                className="block rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="w-auto min-h-11"
               />
             </div>
-            <button
-              type="submit"
-              className="rounded-md border border-input px-3 py-2 text-sm hover:bg-muted"
-            >
+            <Button type="submit" variant="outline" className="min-h-11">
               Load date
-            </button>
+            </Button>
           </form>
 
           <AttendanceDaySummary register={register} />
@@ -120,6 +179,6 @@ export default async function ClassAttendancePage({
           />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

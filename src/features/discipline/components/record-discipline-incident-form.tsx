@@ -9,10 +9,20 @@ import {
   DISCIPLINE_SEVERITIES,
   DISCIPLINE_SEVERITY_LABELS,
 } from "@/features/discipline/schemas";
+import { DisciplineSeverityBadge } from "@/features/discipline/components/discipline-badges";
+import { SectionHeading } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
+import { stickyFormFooterClass } from "@/components/ui/admin-chrome";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { schoolToday } from "@/lib/dates";
 
 interface RecordDisciplineIncidentFormProps {
@@ -31,7 +41,8 @@ export function RecordDisciplineIncidentForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [actionTaken, setActionTaken] = useState("");
-  const [severity, setSeverity] = useState<(typeof DISCIPLINE_SEVERITIES)[number]>("low");
+  const [severity, setSeverity] =
+    useState<(typeof DISCIPLINE_SEVERITIES)[number]>("low");
   const [incidentDate, setIncidentDate] = useState(today());
   const [relatedRuleId, setRelatedRuleId] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -67,112 +78,182 @@ export function RecordDisciplineIncidentForm({
 
   if (!open) {
     return (
-      <Button type="button" variant="outline" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="outline"
+        className="min-h-11"
+        onClick={() => setOpen(true)}
+      >
         Record incident
       </Button>
     );
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-4 rounded-lg border p-4"
-      noValidate
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="font-medium">Record discipline incident</h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </Button>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="incident-title">Title</Label>
-          <Input
-            id="incident-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            required
-            placeholder="e.g. Disruptive behaviour in class"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="incident-date">Date</Label>
-          <Input
-            id="incident-date"
-            type="date"
-            value={incidentDate}
-            onChange={(event) => setIncidentDate(event.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="severity">Severity</Label>
-          <SelectNative
-            id="severity"
-            value={severity}
-            onChange={(event) =>
-              setSeverity(event.target.value as typeof severity)
-            }
+    <form onSubmit={onSubmit} className="relative space-y-4 pb-24" noValidate>
+      <Card className="shadow-sm">
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div>
+            <CardTitle>Record discipline incident</CardTitle>
+            <CardDescription>
+              Capture what happened, severity, and any immediate action. Required
+              fields are marked.
+            </CardDescription>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(false)}
           >
-            {DISCIPLINE_SEVERITIES.map((value) => (
-              <option key={value} value={value}>
-                {DISCIPLINE_SEVERITY_LABELS[value]}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="related-rule">Related rule (optional)</Label>
-          <SelectNative
-            id="related-rule"
-            value={relatedRuleId}
-            onChange={(event) => setRelatedRuleId(event.target.value)}
+            Cancel
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <section className="space-y-4">
+            <SectionHeading
+              title="Incident"
+              description="A clear title helps the office find this case later."
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="incident-title">
+                  Title <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="incident-title"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  required
+                  placeholder="e.g. Disruptive behaviour in class"
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="incident-date">
+                  Date <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="incident-date"
+                  type="date"
+                  value={incidentDate}
+                  onChange={(event) => setIncidentDate(event.target.value)}
+                  required
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="severity">
+                  Severity <span className="text-destructive">*</span>
+                </Label>
+                <SelectNative
+                  id="severity"
+                  value={severity}
+                  onChange={(event) =>
+                    setSeverity(event.target.value as typeof severity)
+                  }
+                  className="h-11"
+                >
+                  {DISCIPLINE_SEVERITIES.map((value) => (
+                    <option key={value} value={value}>
+                      {DISCIPLINE_SEVERITY_LABELS[value]}
+                    </option>
+                  ))}
+                </SelectNative>
+                <div className="pt-1">
+                  <DisciplineSeverityBadge severity={severity} />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SectionHeading
+              title="School rule"
+              description="Link the rule that was breached when known."
+            />
+            <div className="space-y-2">
+              <Label htmlFor="related-rule">Related rule (optional)</Label>
+              <SelectNative
+                id="related-rule"
+                value={relatedRuleId}
+                onChange={(event) => setRelatedRuleId(event.target.value)}
+                className="h-11"
+              >
+                <option value="">— None —</option>
+                {rules.map((rule) => (
+                  <option key={rule.id} value={rule.id}>
+                    {rule.title}
+                  </option>
+                ))}
+              </SelectNative>
+              {rules.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No active rules available. Ask the office to publish school
+                  rules.
+                </p>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <SectionHeading
+              title="Details & action"
+              description="Describe the incident and any steps already taken."
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="description">What happened</Label>
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={4}
+                  className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="action-taken">Action taken (optional)</Label>
+                <Input
+                  id="action-taken"
+                  value={actionTaken}
+                  onChange={(event) => setActionTaken(event.target.value)}
+                  placeholder="e.g. Verbal warning; parents called"
+                  className="h-11"
+                />
+              </div>
+            </div>
+          </section>
+
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <div
+        className={stickyFormFooterClass}
+      >
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className="min-h-11"
+            onClick={() => setOpen(false)}
           >
-            <option value="">— None —</option>
-            {rules.map((rule) => (
-              <option key={rule.id} value={rule.id}>
-                {rule.title}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="description">What happened</Label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            rows={3}
-            className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
-        </div>
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="action-taken">Action taken (optional)</Label>
-          <Input
-            id="action-taken"
-            value={actionTaken}
-            onChange={(event) => setActionTaken(event.target.value)}
-            placeholder="e.g. Verbal warning; parents called"
-          />
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            className="min-h-11 min-w-[9rem]"
+            disabled={isPending || !title.trim()}
+          >
+            {isPending ? "Saving…" : "Save incident"}
+          </Button>
         </div>
       </div>
-
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <Button type="submit" disabled={isPending || !title.trim()}>
-        {isPending ? "Saving..." : "Save incident"}
-      </Button>
     </form>
   );
 }

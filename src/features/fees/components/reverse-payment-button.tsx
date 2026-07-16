@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Undo2 } from "lucide-react";
 
 import { voidPaymentAction } from "@/features/fees/actions";
 import { Button } from "@/components/ui/button";
@@ -47,23 +48,32 @@ export function ReversePaymentButton({
     return (
       <Button
         type="button"
-        variant="ghost"
+        variant="outline"
         size="sm"
+        className="gap-1.5 text-destructive hover:bg-destructive/5 hover:text-destructive"
         onClick={() => setOpen(true)}
+        aria-label={`Reverse payment ${receiptNumber}`}
       >
-        Reverse
+        <Undo2 className="size-3.5" aria-hidden />
+        Reverse payment
       </Button>
     );
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-left">
+    <div
+      className="w-full max-w-sm space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-left"
+      role="group"
+      aria-label={`Confirm reverse for ${receiptNumber}`}
+    >
       <p className="text-xs text-muted-foreground">
-        Reverse {receiptNumber}? The original receipt stays on file as voided.
+        Reverse <span className="font-mono">{receiptNumber}</span>? The
+        original receipt stays on file as voided and does not count toward the
+        balance.
       </p>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <Label htmlFor={`void-reason-${paymentId}`} className="text-xs">
-          Reason (required)
+          Reason <span className="text-destructive">*</span>
         </Label>
         <Input
           id={`void-reason-${paymentId}`}
@@ -71,6 +81,7 @@ export function ReversePaymentButton({
           onChange={(event) => setReason(event.target.value)}
           placeholder="e.g. Recorded in error"
           disabled={isPending}
+          aria-required="true"
         />
       </div>
       {error ? (

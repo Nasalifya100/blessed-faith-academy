@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { setRequirementReceivedAction } from "@/features/fees/actions";
 import type { StudentRequirementRow } from "@/features/fees/queries";
 import { REQUIREMENT_BAND_LABELS } from "@/features/fees/schemas";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface RequirementsChecklistProps {
   studentId: string;
@@ -90,9 +90,9 @@ export function RequirementsChecklist({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={complete ? "secondary" : "outline"}>
+        <StatusBadge tone={complete ? "success" : "neutral"}>
           {receivedCount} / {totalCount} received
-        </Badge>
+        </StatusBadge>
         {gradeLevelName ? (
           <span className="text-sm text-muted-foreground">{gradeLevelName}</span>
         ) : null}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { FileQuestion } from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
@@ -7,7 +8,10 @@ import {
   canViewStudentMedical,
   canViewStudentProfile,
 } from "@/features/auth/permissions";
-import { getStudentProfile, getCurrentYearClasses } from "@/features/students/queries";
+import {
+  getStudentProfile,
+  getCurrentYearClasses,
+} from "@/features/students/queries";
 import {
   getOptionalFeeOptions,
   getStudentFeeStatement,
@@ -23,6 +27,8 @@ import {
   RELATIONSHIP_LABELS,
 } from "@/features/students/schemas";
 import { StudentStatusBadge } from "@/features/students/components/status-badge";
+import { StudentAvatar } from "@/features/students/components/student-avatar";
+import { StudentTimeline } from "@/features/students/components/student-timeline";
 import { ArchiveStudentButton } from "@/features/students/components/archive-student-button";
 import { TransferStudentClassForm } from "@/features/students/components/transfer-student-class-form";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
@@ -33,7 +39,9 @@ import { RequirementsChecklist } from "@/features/fees/components/requirements-c
 import { StudentAttendanceHistoryView } from "@/features/attendance/components/student-attendance-history";
 import { RecordDisciplineIncidentForm } from "@/features/discipline/components/record-discipline-incident-form";
 import { StudentDisciplineList } from "@/features/discipline/components/student-discipline-list";
-import { Badge } from "@/components/ui/badge";
+import { BackLink, PageShell } from "@/components/layout/page-shell";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Card,
   CardContent,
@@ -49,6 +57,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const FEE_MANAGER_ROLES = ["administrator", "bursar", "headteacher"];
 const REQUIREMENT_TRACKER_ROLES = [
@@ -70,7 +79,7 @@ const DISCIPLINE_RESOLVE_ROLES = [
 ];
 
 function formatDate(value: string | null): string {
-  if (!value) return "-";
+  if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString(undefined, {
@@ -82,19 +91,56 @@ function formatDate(value: string | null): string {
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="space-y-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm">{value}</dd>
+    <div className="space-y-1">
+      <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd className="text-sm text-foreground">{value}</dd>
     </div>
+  );
+}
+
+function EmptyPanel({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <EmptyState
+      title={title}
+      description={description}
+      icon={
+        <FileQuestion className="size-6 text-muted-foreground" aria-hidden />
+      }
+      size="sm"
+    />
   );
 }
 
 export default async function StudentProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const tabParam = Array.isArray(sp.tab) ? sp.tab[0] : sp.tab;
+  const allowedTabs = new Set([
+    "overview",
+    "guardians",
+    "fees",
+    "attendance",
+    "discipline",
+    "documents",
+    "medical",
+    "timeline",
+  ]);
+  const defaultTab =
+    tabParam && allowedTabs.has(tabParam) ? tabParam : "overview";
   const [
     student,
     current,
@@ -125,9 +171,7 @@ export default async function StudentProfilePage({
   if (!canViewStudentProfile(role)) {
     redirect("/dashboard");
   }
-  const canManageFees = Boolean(
-    role && FEE_MANAGER_ROLES.includes(role),
-  );
+  const canManageFees = Boolean(role && FEE_MANAGER_ROLES.includes(role));
   const canTrackRequirements = Boolean(
     current?.profile?.is_active &&
       role &&
@@ -155,334 +199,443 @@ export default async function StudentProfilePage({
     Boolean(student.currentClassId) &&
     yearClasses.classes.length > 1;
 
+  const primaryGuardian =
+    student.guardians.find((g) => g.isPrimary) ?? student.guardians[0] ?? null;
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div className="space-y-2">
-        <Link
-          href="/dashboard/students"
-          className="text-sm text-muted-foreground hover:underline"
-        >
-          &larr; Back to students
-        </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold">{student.fullName}</h1>
-          <StudentStatusBadge status={student.status} />
-        </div>
-        <p className="text-muted-foreground font-mono text-sm">
-          {student.admissionNumber}
-        </p>
-        {canArchive || canTransfer ? (
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:flex-wrap">
-            {canTransfer ? (
-              <TransferStudentClassForm
-                studentId={student.id}
-                studentName={student.fullName}
-                currentClassId={student.currentClassId}
-                classes={yearClasses.classes}
-              />
-            ) : null}
-            {canArchive ? (
-              <ArchiveStudentButton
-                studentId={student.id}
-                studentName={student.fullName}
-              />
-            ) : null}
-          </div>
-        ) : null}
-        {student.status === "withdrawn" && student.archiveReason ? (
-          <p className="text-sm text-muted-foreground">
-            Archive reason: {student.archiveReason}
-          </p>
-        ) : null}
-      </div>
+    <PageShell>
+      <div className="space-y-4">
+        <BackLink href="/dashboard/students">Back to students</BackLink>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Student details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-4 sm:grid-cols-3">
-            <Detail
-              label="Gender"
-              value={
-                (GENDER_LABELS as Record<string, string>)[student.gender] ??
-                student.gender
-              }
-            />
-            <Detail
-              label="Date of birth"
-              value={formatDate(student.dateOfBirth)}
-            />
-            <Detail
-              label="Current class"
-              value={student.currentClassName ?? "Not assigned"}
-            />
-            <Detail
-              label="Enrollment date"
-              value={formatDate(student.enrollmentDate)}
-            />
-            <Detail
-              label="Place of birth"
-              value={student.placeOfBirth ?? "-"}
-            />
-            <Detail
-              label="Religious denomination"
-              value={student.religiousDenomination ?? "-"}
-            />
-            <Detail
-              label="Present / last school"
-              value={student.previousSchool ?? "-"}
-            />
-            <Detail
-              label="Proposed admission date"
-              value={formatDate(student.proposedAdmissionDate)}
-            />
-            <Detail
-              label="Zambian citizen"
-              value={
-                student.isZambianCitizen === null
-                  ? "-"
-                  : student.isZambianCitizen
-                    ? "Yes"
-                    : "No"
-              }
-            />
-            {canSeeMedical ? (
-              <>
-                <Detail
-                  label="Vaccinated (smallpox)"
-                  value={
-                    student.vaccinatedSmallpox === null
-                      ? "-"
-                      : student.vaccinatedSmallpox
-                        ? `Yes${student.vaccinationDate ? ` (${formatDate(student.vaccinationDate)})` : ""}`
-                        : "No"
-                  }
-                />
-                <Detail
-                  label="Medical notes / allergies"
-                  value={student.medicalNotes ?? "-"}
-                />
-              </>
-            ) : null}
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Parents / guardians</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {student.guardians.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No guardians recorded.
-            </p>
-          ) : (
-            student.guardians.map((guardian) => (
-              <div
-                key={guardian.id}
-                className="space-y-3 rounded-lg border p-4"
-              >
+        <Card className="shadow-sm">
+          <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <StudentAvatar
+                name={student.fullName}
+                className="size-16 text-base"
+              />
+              <div className="min-w-0 space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-medium">{guardian.fullName}</p>
-                  <Badge variant="outline">
-                    {(RELATIONSHIP_LABELS as Record<string, string>)[
-                      guardian.relationship
-                    ] ?? guardian.relationship}
-                  </Badge>
-                  {guardian.isPrimary ? (
-                    <Badge variant="success">Primary contact</Badge>
-                  ) : null}
-                  {guardian.isEmergency ? (
-                    <Badge variant="secondary">Emergency contact</Badge>
-                  ) : null}
+                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                    {student.fullName}
+                  </h1>
+                  <StudentStatusBadge status={student.status} />
                 </div>
-                <dl className="grid gap-4 sm:grid-cols-3">
-                  <Detail label="Phone" value={guardian.phone ?? "-"} />
-                  <Detail label="WhatsApp" value={guardian.whatsapp ?? "-"} />
+                <p className="font-mono text-sm text-muted-foreground">
+                  {student.admissionNumber}
+                </p>
+                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <Detail
-                    label="Alternate phone"
-                    value={guardian.altPhone ?? "-"}
-                  />
-                  <Detail label="Email" value={guardian.email ?? "-"} />
-                  <Detail
-                    label="NRC / national ID"
-                    value={guardian.nationalId ?? "-"}
+                    label="Class / grade"
+                    value={student.currentClassName ?? "Not assigned"}
                   />
                   <Detail
-                    label="Occupation"
-                    value={guardian.occupation ?? "-"}
+                    label="Primary guardian"
+                    value={primaryGuardian?.fullName ?? "—"}
                   />
                   <Detail
-                    label="Residential address"
-                    value={guardian.address ?? "-"}
-                  />
-                  <Detail
-                    label="Postal address"
-                    value={guardian.postalAddress ?? "-"}
+                    label="Enrollment date"
+                    value={formatDate(student.enrollmentDate)}
                   />
                 </dl>
+                {student.status === "withdrawn" && student.archiveReason ? (
+                  <p className="text-sm text-muted-foreground">
+                    Archive reason: {student.archiveReason}
+                  </p>
+                ) : null}
               </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Fees &amp; balance</CardTitle>
-          <CardDescription>
-            Statement for
-            {statement.academicYearName
-              ? ` academic year ${statement.academicYearName}`
-              : " the current academic year"}
-            {statement.currentTermName
-              ? ` · current term: ${statement.currentTermName}`
-              : ""}
-            . Generate mandatory fees first, then opt in to meals and uniforms
-            below.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {canManageFees && student.status === "enrolled" ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <GenerateStudentChargesButton
-                  studentId={student.id}
-                  termId={statement.currentTermId}
-                  termName={statement.currentTermName}
-                />
-                <RecordPaymentForm
-                  studentId={student.id}
-                  currentBalance={statement.balance}
-                />
-              </div>
-              <OptionalFeesOptInForm
-                studentId={student.id}
-                termId={optionalFees.currentTermId}
-                termName={optionalFees.currentTermName}
-                meals={optionalFees.meals}
-                uniforms={optionalFees.uniforms}
-                activeMealFeeItemId={optionalFees.activeMealFeeItemId}
-              />
             </div>
+
+            {(canArchive || canTransfer) && (
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-56">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                  Quick actions
+                </p>
+                {canTransfer ? (
+                  <TransferStudentClassForm
+                    studentId={student.id}
+                    studentName={student.fullName}
+                    currentClassId={student.currentClassId}
+                    classes={yearClasses.classes}
+                  />
+                ) : null}
+                {canArchive ? (
+                  <ArchiveStudentButton
+                    studentId={student.id}
+                    studentName={student.fullName}
+                  />
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs defaultValue={defaultTab} key={defaultTab}>
+        <TabsList aria-label="Student profile sections">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="guardians">Guardians</TabsTrigger>
+          <TabsTrigger value="fees">Fees</TabsTrigger>
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          <TabsTrigger value="discipline">Discipline</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="medical">Medical</TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Student details</CardTitle>
+                <CardDescription>Core identity and enrolment facts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <Detail
+                    label="Gender"
+                    value={
+                      (GENDER_LABELS as Record<string, string>)[
+                        student.gender
+                      ] ?? student.gender
+                    }
+                  />
+                  <Detail
+                    label="Date of birth"
+                    value={formatDate(student.dateOfBirth)}
+                  />
+                  <Detail
+                    label="Place of birth"
+                    value={student.placeOfBirth ?? "—"}
+                  />
+                  <Detail
+                    label="Religious denomination"
+                    value={student.religiousDenomination ?? "—"}
+                  />
+                  <Detail
+                    label="Present / last school"
+                    value={student.previousSchool ?? "—"}
+                  />
+                  <Detail
+                    label="Proposed admission date"
+                    value={formatDate(student.proposedAdmissionDate)}
+                  />
+                  <Detail
+                    label="Zambian citizen"
+                    value={
+                      student.isZambianCitizen === null
+                        ? "—"
+                        : student.isZambianCitizen
+                          ? "Yes"
+                          : "No"
+                    }
+                  />
+                </dl>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader>
+                <CardTitle>Enrolment history</CardTitle>
+                <CardDescription>Class placements by academic year</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {student.enrolments.length === 0 ? (
+                  <EmptyPanel
+                    title="No enrolments recorded"
+                    description="Class placements for this pupil will appear here."
+                  />
+                ) : (
+                  <div className="overflow-hidden rounded-xl border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Academic year</TableHead>
+                          <TableHead>Class</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Enrolled on</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {student.enrolments.map((enrolment) => (
+                          <TableRow key={enrolment.id}>
+                            <TableCell>
+                              {enrolment.academicYearName}
+                              {enrolment.isCurrent ? (
+                                <StatusBadge tone="info" className="ml-2">
+                                  Current
+                                </StatusBadge>
+                              ) : null}
+                            </TableCell>
+                            <TableCell>{enrolment.className}</TableCell>
+                            <TableCell className="capitalize">
+                              {enrolment.status}
+                            </TableCell>
+                            <TableCell>
+                              {formatDate(enrolment.enrolledOn)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="guardians">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Parents / guardians</CardTitle>
+              <CardDescription>
+                Contacts linked to this student record
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {student.guardians.length === 0 ? (
+                <EmptyPanel
+                  title="No guardians recorded"
+                  description="Add guardians when enrolling or updating the student record."
+                />
+              ) : (
+                student.guardians.map((guardian) => (
+                  <div
+                    key={guardian.id}
+                    className="space-y-4 rounded-xl border p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StudentAvatar name={guardian.fullName} />
+                      <p className="font-medium">{guardian.fullName}</p>
+                      <StatusBadge tone="neutral">
+                        {(RELATIONSHIP_LABELS as Record<string, string>)[
+                          guardian.relationship
+                        ] ?? guardian.relationship}
+                      </StatusBadge>
+                      {guardian.isPrimary ? (
+                        <StatusBadge tone="success">Primary contact</StatusBadge>
+                      ) : null}
+                      {guardian.isEmergency ? (
+                        <StatusBadge tone="warning">Emergency contact</StatusBadge>
+                      ) : null}
+                    </div>
+                    <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <Detail label="Phone" value={guardian.phone ?? "—"} />
+                      <Detail
+                        label="WhatsApp"
+                        value={guardian.whatsapp ?? "—"}
+                      />
+                      <Detail
+                        label="Alternate phone"
+                        value={guardian.altPhone ?? "—"}
+                      />
+                      <Detail label="Email" value={guardian.email ?? "—"} />
+                      <Detail
+                        label="NRC / national ID"
+                        value={guardian.nationalId ?? "—"}
+                      />
+                      <Detail
+                        label="Occupation"
+                        value={guardian.occupation ?? "—"}
+                      />
+                      <Detail
+                        label="Residential address"
+                        value={guardian.address ?? "—"}
+                      />
+                      <Detail
+                        label="Postal address"
+                        value={guardian.postalAddress ?? "—"}
+                      />
+                    </dl>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="fees" className="space-y-6">
+          {canManageFees && student.status === "enrolled" ? (
+            <section
+              aria-label="Fee management actions"
+              className="grid gap-4 lg:grid-cols-2"
+            >
+              <GenerateStudentChargesButton
+                studentId={student.id}
+                termId={statement.currentTermId}
+                termName={statement.currentTermName}
+              />
+              <RecordPaymentForm
+                studentId={student.id}
+                currentBalance={statement.balance}
+                studentName={student.fullName}
+              />
+              <div className="lg:col-span-2">
+                <OptionalFeesOptInForm
+                  studentId={student.id}
+                  termId={optionalFees.currentTermId}
+                  termName={optionalFees.currentTermName}
+                  meals={optionalFees.meals}
+                  uniforms={optionalFees.uniforms}
+                  activeMealFeeItemId={optionalFees.activeMealFeeItemId}
+                />
+              </div>
+            </section>
           ) : null}
           <FeeStatement
             statement={statement}
             studentId={student.id}
+            studentName={student.fullName}
+            admissionNumber={student.admissionNumber}
+            studentGradeName={
+              yearClasses.classes.find((c) => c.id === student.currentClassId)
+                ?.gradeName ?? student.currentClassName
+            }
+            studentClassName={
+              yearClasses.classes.find((c) => c.id === student.currentClassId)
+                ?.name ?? student.currentClassName
+            }
+            studentStatus={student.status}
             canManageFees={canManageFees}
           />
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Requirements checklist</CardTitle>
-          <CardDescription>
-            Tick items as parents bring them in. This is not billed as money.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RequirementsChecklist
-            studentId={student.id}
-            academicYearName={requirements.academicYearName}
-            gradeLevelName={requirements.gradeLevelName}
-            band={requirements.band}
-            items={requirements.items}
-            receivedCount={requirements.receivedCount}
-            totalCount={requirements.totalCount}
-            canEdit={canTrackRequirements}
-          />
-        </CardContent>
-      </Card>
+        <TabsContent value="attendance">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Attendance</CardTitle>
+              <CardDescription>
+                Register marks for the current academic year.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <StudentAttendanceHistoryView history={attendance} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Attendance</CardTitle>
-          <CardDescription>
-            Register marks for the current academic year.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <StudentAttendanceHistoryView history={attendance} />
-        </CardContent>
-      </Card>
+        <TabsContent value="discipline">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Discipline</CardTitle>
+              <CardDescription>
+                Behaviour incidents. See{" "}
+                <Link
+                  href="/dashboard/rules"
+                  className="underline underline-offset-2"
+                >
+                  school rules
+                </Link>{" "}
+                or the{" "}
+                <Link
+                  href="/dashboard/discipline"
+                  className="underline underline-offset-2"
+                >
+                  school-wide list
+                </Link>
+                .
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {canRecordDiscipline ? (
+                <RecordDisciplineIncidentForm
+                  studentId={student.id}
+                  rules={rules}
+                />
+              ) : null}
+              <StudentDisciplineList
+                studentId={student.id}
+                incidents={incidents}
+                canResolve={canResolveDiscipline}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Discipline</CardTitle>
-          <CardDescription>
-            Behaviour and discipline incidents. See{" "}
-            <Link href="/dashboard/rules" className="underline">
-              school rules
-            </Link>{" "}
-            or the{" "}
-            <Link href="/dashboard/discipline" className="underline">
-              school-wide list
-            </Link>
-            .
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {canRecordDiscipline ? (
-            <RecordDisciplineIncidentForm
-              studentId={student.id}
-              rules={rules}
-            />
-          ) : null}
-          <StudentDisciplineList
-            studentId={student.id}
+        <TabsContent value="documents" className="space-y-4">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Requirements checklist</CardTitle>
+              <CardDescription>
+                Tick items as parents bring them in. This is not billed as money.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RequirementsChecklist
+                studentId={student.id}
+                academicYearName={requirements.academicYearName}
+                gradeLevelName={requirements.gradeLevelName}
+                band={requirements.band}
+                items={requirements.items}
+                receivedCount={requirements.receivedCount}
+                totalCount={requirements.totalCount}
+                canEdit={canTrackRequirements}
+              />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Uploaded documents</CardTitle>
+              <CardDescription>
+                File uploads are not part of this release.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <EmptyPanel
+                title="No document uploads yet"
+                description="When document storage is enabled, birth certificates and related files will appear here."
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="medical">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle>Medical</CardTitle>
+              <CardDescription>
+                Sensitive health information for authorised staff only.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {canSeeMedical ? (
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <Detail
+                    label="Vaccinated (smallpox)"
+                    value={
+                      student.vaccinatedSmallpox === null
+                        ? "—"
+                        : student.vaccinatedSmallpox
+                          ? `Yes${student.vaccinationDate ? ` (${formatDate(student.vaccinationDate)})` : ""}`
+                          : "No"
+                    }
+                  />
+                  <Detail
+                    label="Medical notes / allergies"
+                    value={student.medicalNotes ?? "—"}
+                  />
+                </dl>
+              ) : (
+                <EmptyPanel
+                  title="Medical details restricted"
+                  description="Your role cannot view medical notes for this student."
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="timeline">
+          <StudentTimeline
+            enrollmentDate={student.enrollmentDate}
+            enrolments={student.enrolments}
+            payments={[...statement.payments, ...statement.voidedPayments]}
+            corrections={attendance.corrections}
             incidents={incidents}
-            canResolve={canResolveDiscipline}
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Enrolment history</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {student.enrolments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No class enrolments recorded.
-            </p>
-          ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Academic year</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Enrolled on</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {student.enrolments.map((enrolment) => (
-                    <TableRow key={enrolment.id}>
-                      <TableCell>
-                        {enrolment.academicYearName}
-                        {enrolment.isCurrent ? (
-                          <Badge variant="secondary" className="ml-2">
-                            Current
-                          </Badge>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>{enrolment.className}</TableCell>
-                      <TableCell className="capitalize">
-                        {enrolment.status}
-                      </TableCell>
-                      <TableCell>{formatDate(enrolment.enrolledOn)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </TabsContent>
+      </Tabs>
+    </PageShell>
   );
 }

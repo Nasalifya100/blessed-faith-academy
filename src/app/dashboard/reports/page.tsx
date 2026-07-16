@@ -1,5 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  AlertTriangle,
+  ClipboardList,
+  Download,
+  Eye,
+  Printer,
+  Users,
+  Wallet,
+} from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
@@ -9,6 +18,13 @@ import {
   getFeeBalancesReport,
 } from "@/features/reports/queries";
 import { formatKwacha } from "@/lib/money";
+import {
+  PageHeader,
+  PageShell,
+  SectionHeading,
+  BackLink,
+} from "@/components/layout/page-shell";
+import { StatCard } from "@/components/ui/stat-card";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +33,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const REPORT_ROLES = [
   "administrator",
@@ -31,6 +48,15 @@ const FEE_REPORT_ROLES = [
   "bursar",
   "secretary",
 ];
+
+function overallAttendanceRate(
+  rows: { present: number; late: number; totalMarks: number }[],
+): number {
+  const present = rows.reduce((sum, row) => sum + row.present + row.late, 0);
+  const total = rows.reduce((sum, row) => sum + row.totalMarks, 0);
+  if (total === 0) return 0;
+  return Math.round((present / total) * 100);
+}
 
 export default async function ReportsHubPage() {
   const current = await getCurrentUser();
@@ -51,115 +77,181 @@ export default async function ReportsHubPage() {
     getDisciplineSnapshotReport(),
   ]);
 
+  const attendanceRate = overallAttendanceRate(attendance.rows);
+  const yearLabel =
+    enrolment.academicYearName ??
+    attendance.academicYearName ??
+    fees?.academicYearName ??
+    null;
+
+  const reports = [
+    {
+      name: "Attendance",
+      description:
+        "Class registers and attendance rates for the selected period.",
+      href: "/dashboard/reports/attendance",
+      icon: ClipboardList,
+      meta: `${attendanceRate}% overall · ${attendance.rows.length} classes`,
+    },
+    canSeeFees
+      ? {
+          name: "Fee Balances",
+          description:
+            "Outstanding balances, charged totals, and students owing.",
+          href: "/dashboard/reports/fee-balances",
+          icon: Wallet,
+          meta: fees
+            ? `${formatKwacha(fees.totals.balance)} outstanding`
+            : "Fee snapshot",
+        }
+      : null,
+    {
+      name: "Enrolment",
+      description: "Active pupils by class for the current academic year.",
+      href: "/dashboard/reports/enrolment",
+      icon: Users,
+      meta: `${enrolment.totalEnrolled} enrolled`,
+    },
+    {
+      name: "Discipline",
+      description: "Open and resolved incidents across the school.",
+      href: "/dashboard/reports/discipline",
+      icon: AlertTriangle,
+      meta: `${discipline.openCount} open · ${discipline.resolvedCount} resolved`,
+    },
+  ].filter(Boolean) as {
+    name: string;
+    description: string;
+    href: string;
+    icon: typeof ClipboardList;
+    meta: string;
+  }[];
+
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Reports</h1>
-        <p className="text-muted-foreground">
-          Snapshots for the current academic year. Open a report for the full
-          table.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Reports"
+        title="Reports"
+        description={
+          <>
+            Executive snapshot
+            {yearLabel ? ` · ${yearLabel}` : ""}. Summaries first — open a report
+            for the full table, export, or print.
+          </>
+        }
+        breadcrumb={<BackLink href="/dashboard">Back to dashboard</BackLink>}
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Total students"
+          value={String(enrolment.totalEnrolled)}
+          hint="Active enrolments this year"
+          icon={Users}
+          tone="info"
+          href="/dashboard/reports/enrolment"
+        />
+        <StatCard
+          title="Attendance rate"
+          value={`${attendanceRate}%`}
+          hint="Present + late across all marks"
+          icon={ClipboardList}
+          tone={attendanceRate >= 90 ? "success" : attendanceRate >= 75 ? "warning" : "danger"}
+          href="/dashboard/reports/attendance"
+        />
         {canSeeFees && fees ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Fee balances</CardTitle>
-              <CardDescription>
-                Outstanding balances
-                {fees.academicYearName ? ` · ${fees.academicYearName}` : ""}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-2xl font-semibold text-destructive">
-                {formatKwacha(fees.totals.balance)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {fees.totals.studentsWithBalance} student
-                {fees.totals.studentsWithBalance === 1 ? "" : "s"} with a balance
-              </p>
-              <Link
-                href="/dashboard/reports/fee-balances"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                Open report
-              </Link>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Attendance</CardTitle>
-            <CardDescription>
-              By class
-              {attendance.academicYearName
-                ? ` · ${attendance.academicYearName}`
-                : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-2xl font-semibold">
-              {attendance.rows.length} class
-              {attendance.rows.length === 1 ? "" : "es"}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Present + late counted as in school
-            </p>
-            <Link
-              href="/dashboard/reports/attendance"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Open report
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Enrolment</CardTitle>
-            <CardDescription>
-              Pupils per class
-              {enrolment.academicYearName
-                ? ` · ${enrolment.academicYearName}`
-                : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-2xl font-semibold">{enrolment.totalEnrolled}</p>
-            <p className="text-sm text-muted-foreground">
-              Active enrolments this year
-            </p>
-            <Link
-              href="/dashboard/reports/enrolment"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Open report
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Discipline</CardTitle>
-            <CardDescription>Open vs resolved incidents</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-2xl font-semibold">{discipline.openCount} open</p>
-            <p className="text-sm text-muted-foreground">
-              {discipline.highOpenCount} high severity ·{" "}
-              {discipline.resolvedCount} resolved
-            </p>
-            <Link
-              href="/dashboard/discipline?status=open"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              View incidents
-            </Link>
-          </CardContent>
-        </Card>
+          <StatCard
+            title="Outstanding fees"
+            value={formatKwacha(fees.totals.balance)}
+            hint={`${fees.totals.studentsWithBalance} student${fees.totals.studentsWithBalance === 1 ? "" : "s"} owing`}
+            icon={Wallet}
+            tone={fees.totals.balance > 0 ? "danger" : "success"}
+            href="/dashboard/reports/fee-balances"
+          />
+        ) : (
+          <StatCard
+            title="Outstanding fees"
+            value="—"
+            hint="Not available for your role"
+            icon={Wallet}
+          />
+        )}
+        <StatCard
+          title="Open discipline"
+          value={String(discipline.openCount)}
+          hint={`${discipline.highOpenCount} high severity · ${discipline.resolvedCount} resolved`}
+          icon={AlertTriangle}
+          tone={discipline.openCount > 0 ? "warning" : "success"}
+          href="/dashboard/reports/discipline"
+        />
       </div>
-    </div>
+
+      <section className="space-y-3">
+        <SectionHeading
+          title="Report library"
+          description="View summaries, export CSV, or print any report."
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {reports.map((report) => {
+            const Icon = report.icon;
+            return (
+              <Card key={report.href} className="shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
+                      <Icon
+                        className="size-5 text-muted-foreground"
+                        aria-hidden
+                      />
+                    </span>
+                    <div className="min-w-0 space-y-1">
+                      <CardTitle className="text-lg">{report.name}</CardTitle>
+                      <CardDescription>{report.description}</CardDescription>
+                      <p className="text-xs text-muted-foreground">
+                        {report.meta}
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      href={report.href}
+                      className={cn(
+                        buttonVariants({ variant: "default", size: "sm" }),
+                        "min-h-10",
+                      )}
+                    >
+                      <Eye className="size-4" aria-hidden />
+                      View
+                    </Link>
+                    <Link
+                      href={report.href}
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "sm" }),
+                        "min-h-10",
+                      )}
+                    >
+                      <Download className="size-4" aria-hidden />
+                      Export
+                    </Link>
+                    <Link
+                      href={report.href}
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "sm" }),
+                        "min-h-10",
+                      )}
+                    >
+                      <Printer className="size-4" aria-hidden />
+                      Print
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+    </PageShell>
   );
 }

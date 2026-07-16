@@ -5,6 +5,12 @@ import { listStaffWithEmails } from "@/features/staff/queries";
 import { CreateStaffForm } from "@/features/staff/components/create-staff-form";
 import { StaffTable } from "@/features/staff/components/staff-table";
 import {
+  BackLink,
+  PageHeader,
+  PageShell,
+  SectionHeading,
+} from "@/components/layout/page-shell";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -21,20 +27,22 @@ export default async function StaffPage() {
   const staff = await listStaffWithEmails();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Staff accounts</h1>
-        <p className="text-muted-foreground">
-          Create staff logins and manage their roles and access.
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Administration"
+        title="Staff"
+        description="Create staff logins and manage roles and system access."
+        breadcrumb={
+          <BackLink href="/dashboard">Back to dashboard</BackLink>
+        }
+      />
 
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Add a staff member</CardTitle>
           <CardDescription>
-            They can sign in immediately using the email and temporary password
-            you set here. Ask them to keep the password private.
+            New accounts can sign in immediately with the temporary password you
+            set.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -42,10 +50,13 @@ export default async function StaffPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-3">
-        <h2 className="text-lg font-semibold">All staff</h2>
+      <section className="space-y-3">
+        <SectionHeading
+          title="Staff management"
+          description="Overview, directory, and profile details for every account."
+        />
         <StaffTable staff={staff} currentUserId={current.id} />
-      </div>
-    </div>
+      </section>
+    </PageShell>
   );
 }

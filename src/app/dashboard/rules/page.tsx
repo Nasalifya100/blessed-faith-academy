@@ -1,15 +1,16 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { listSchoolRules } from "@/features/discipline/queries";
 import { SchoolRulesList } from "@/features/discipline/components/school-rules-list";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  BackLink,
+  PageHeader,
+  PageShell,
+} from "@/components/layout/page-shell";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const VIEWER_ROLES = [
   "administrator",
@@ -34,28 +35,29 @@ export default async function SchoolRulesPage() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">School rules</h1>
-        <p className="text-muted-foreground">
-          {canEdit
+    <PageShell>
+      <PageHeader
+        eyebrow="Operations"
+        title="School rules"
+        description={
+          canEdit
             ? "Edit the official rules staff and parents refer to. Inactive rules stay hidden from incident forms."
-            : "Reference list of school rules. Contact the headteacher or administrator to change them."}
-        </p>
-      </div>
+            : "Reference list of school rules. Contact the headteacher or administrator to change them."
+        }
+        breadcrumb={
+          <BackLink href="/dashboard/discipline">Back to discipline</BackLink>
+        }
+        actions={
+          <Link
+            href="/dashboard/discipline"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Discipline cases
+          </Link>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Rules</CardTitle>
-          <CardDescription>
-            {rules.length} rule{rules.length === 1 ? "" : "s"}
-            {canEdit ? "" : " (active only)"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SchoolRulesList rules={rules} canEdit={canEdit} />
-        </CardContent>
-      </Card>
-    </div>
+      <SchoolRulesList rules={rules} canEdit={canEdit} />
+    </PageShell>
   );
 }

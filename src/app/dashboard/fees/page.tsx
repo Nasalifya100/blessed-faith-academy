@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { getFeesSetupData } from "@/features/fees/queries";
+import { getFeeBalancesReport } from "@/features/reports/queries";
 import { getCurrentYearClasses } from "@/features/students/queries";
 import {
   BILLING_FREQUENCY_LABELS,
@@ -11,9 +14,19 @@ import {
 } from "@/features/fees/schemas";
 import { ScheduleAmountEditor } from "@/features/fees/components/schedule-amount-editor";
 import { GenerateClassChargesPanel } from "@/features/fees/components/generate-class-charges-panel";
+import { FinanceDashboardSummary } from "@/features/fees/components/finance-dashboard-summary";
 import { SetCurrentPeriodPanel } from "@/features/config/components/set-current-period-panel";
 import { listAcademicYearsAndTerms } from "@/features/config/queries";
-import { Badge } from "@/components/ui/badge";
+import {
+  PageHeader,
+  PageShell,
+  SectionHeading,
+  BackLink,
+} from "@/components/layout/page-shell";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { stickyHeaderClass } from "@/components/ui/admin-chrome";
 import {
   Card,
   CardContent,
@@ -38,26 +51,38 @@ const FEE_VIEWER_ROLES = [
   "secretary",
 ];
 
-export default async function FeesPage() {
-  const current = await getCurrentUser();
-  const role = current?.profile?.role;
+function FeesPageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-64 rounded-xl" />
+    </div>
+  );
+}
 
-  if (!role || !FEE_VIEWER_ROLES.includes(role)) {
-    redirect("/dashboard");
-  }
-
-  const canEdit = FEE_MANAGER_ROLES.includes(role);
-  const isAdmin = role === "administrator";
+async function FeesDashboardBody({
+  canEdit,
+  isAdmin,
+}: {
+  canEdit: boolean;
+  isAdmin: boolean;
+}) {
   const [
     { academicYearName, currentTermId, currentTermName, items, requirements },
     yearClasses,
     periodOptions,
+    balances,
   ] = await Promise.all([
     getFeesSetupData(),
     getCurrentYearClasses(),
     isAdmin
       ? listAcademicYearsAndTerms()
       : Promise.resolve({ years: [], terms: [] }),
+    getFeeBalancesReport({ outstandingOnly: false }),
   ]);
 
   const requirementsByBand = new Map<string, typeof requirements>();
@@ -68,20 +93,15 @@ export default async function FeesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Fees &amp; requirements</h1>
-        <p className="text-muted-foreground">
-          Fee schedule for
-          {academicYearName ? ` academic year ${academicYearName}` : " the current academic year"}
-          {canEdit
-            ? ". Click an amount to edit it."
-            : ". View only — contact an administrator or bursar to change amounts or record payments."}
-        </p>
-      </div>
+    <>
+      <FinanceDashboardSummary
+        balances={balances}
+        termName={currentTermName}
+        canEdit={canEdit}
+      />
 
       {isAdmin ? (
-        <Card>
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle>Current year &amp; term</CardTitle>
             <CardDescription>
@@ -99,12 +119,13 @@ export default async function FeesPage() {
       ) : null}
 
       {canEdit ? (
-        <Card>
+        <Card id="generate-charges" className="scroll-mt-6 shadow-sm">
           <CardHeader>
             <CardTitle>Generate class charges</CardTitle>
             <CardDescription>
               Apply mandatory fees for every enrolled pupil in a class for the
-              current term.
+              current term
+              {currentTermName ? ` (${currentTermName})` : ""}.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -117,12 +138,29 @@ export default async function FeesPage() {
         </Card>
       ) : null}
 
+      <div className="space-y-2">
+        <SectionHeading
+          title="Fee schedule"
+          description={
+            <>
+              Catalogue for
+              {academicYearName
+                ? ` academic year ${academicYearName}`
+                : " the current academic year"}
+              {canEdit
+                ? ". Click an amount to edit it."
+                : ". View only — contact an administrator or bursar to change amounts."}
+            </>
+          }
+        />
+      </div>
+
       {FEE_CATEGORIES.map((category) => {
         const categoryItems = items.filter((item) => item.category === category);
         if (categoryItems.length === 0) return null;
 
         return (
-          <Card key={category}>
+          <Card key={category} className="shadow-sm">
             <CardHeader>
               <CardTitle>{FEE_CATEGORY_LABELS[category]}</CardTitle>
               <CardDescription>
@@ -138,45 +176,53 @@ export default async function FeesPage() {
                 <div key={item.id} className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-medium">{item.name}</h3>
-                    <Badge variant="outline">
+                    <StatusBadge tone="neutral">
                       {BILLING_FREQUENCY_LABELS[item.billingFrequency] ??
                         item.billingFrequency}
-                    </Badge>
+                    </StatusBadge>
                     {item.isOptional ? (
-                      <Badge variant="secondary">Optional</Badge>
+                      <StatusBadge tone="info">Optional</StatusBadge>
                     ) : null}
                   </div>
 
                   {item.schedules.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No amount set for this year yet.
-                    </p>
+                    <EmptyState
+                      title="No amount set for this year yet"
+                      size="sm"
+                    />
                   ) : (
-                    <div className="rounded-lg border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Applies to</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {item.schedules.map((schedule) => (
-                            <TableRow key={schedule.id}>
-                              <TableCell>
-                                {schedule.gradeLevelName ?? "All grades"}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <ScheduleAmountEditor
-                                  scheduleId={schedule.id}
-                                  initialAmount={schedule.amount}
-                                  canEdit={canEdit}
-                                />
-                              </TableCell>
+                    <div className="overflow-hidden rounded-xl border">
+                      <div className="relative max-h-80 overflow-auto">
+                        <Table>
+                          <TableHeader className={stickyHeaderClass}>
+                            <TableRow>
+                              <TableHead>Applies to</TableHead>
+                              <TableHead className="text-right">
+                                Amount
+                              </TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {item.schedules.map((schedule) => (
+                              <TableRow
+                                key={schedule.id}
+                                className="transition-colors hover:bg-muted/40"
+                              >
+                                <TableCell>
+                                  {schedule.gradeLevelName ?? "All grades"}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <ScheduleAmountEditor
+                                    scheduleId={schedule.id}
+                                    initialAmount={schedule.amount}
+                                    canEdit={canEdit}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -186,7 +232,7 @@ export default async function FeesPage() {
         );
       })}
 
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle>Requirements checklist</CardTitle>
           <CardDescription>
@@ -199,7 +245,7 @@ export default async function FeesPage() {
             if (bandItems.length === 0) return null;
             return (
               <div key={band} className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
                   {REQUIREMENT_BAND_LABELS[band] ?? band}
                 </h3>
                 <ul className="list-disc space-y-1 pl-5 text-sm">
@@ -215,6 +261,43 @@ export default async function FeesPage() {
           })}
         </CardContent>
       </Card>
-    </div>
+
+      <p className="text-center text-sm text-muted-foreground">
+        Need a printable balances list?{" "}
+        <Link
+          href="/dashboard/reports/fee-balances"
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
+          Open fee balances report
+        </Link>
+      </p>
+    </>
+  );
+}
+
+export default async function FeesPage() {
+  const current = await getCurrentUser();
+  const role = current?.profile?.role;
+
+  if (!role || !FEE_VIEWER_ROLES.includes(role)) {
+    redirect("/dashboard");
+  }
+
+  const canEdit = FEE_MANAGER_ROLES.includes(role);
+  const isAdmin = role === "administrator";
+
+  return (
+    <PageShell className="space-y-8">
+      <PageHeader
+        eyebrow="Finance"
+        title="Fees & payments"
+        description="Overview of outstanding balances, collections, and the fee catalogue."
+        breadcrumb={<BackLink href="/dashboard">Back to dashboard</BackLink>}
+      />
+
+      <Suspense fallback={<FeesPageSkeleton />}>
+        <FeesDashboardBody canEdit={canEdit} isAdmin={isAdmin} />
+      </Suspense>
+    </PageShell>
   );
 }

@@ -1,24 +1,17 @@
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { STUDENT_STATUS_LABELS } from "@/features/students/schemas";
 
-type BadgeVariant =
-  | "default"
-  | "secondary"
-  | "destructive"
-  | "success"
-  | "outline";
-
-const STATUS_VARIANT: Record<string, BadgeVariant> = {
+const STATUS_TONE: Record<string, StatusTone> = {
   enrolled: "success",
-  applicant: "secondary",
-  withdrawn: "destructive",
-  rejected: "destructive",
-  graduated: "outline",
+  applicant: "info",
+  withdrawn: "danger",
+  rejected: "danger",
+  graduated: "neutral",
 };
 
 export function StudentStatusBadge({ status }: { status: string }) {
   const label =
     (STUDENT_STATUS_LABELS as Record<string, string>)[status] ?? status;
-  const variant = STATUS_VARIANT[status] ?? "outline";
-  return <Badge variant={variant}>{label}</Badge>;
+  const tone = STATUS_TONE[status] ?? "neutral";
+  return <StatusBadge tone={tone}>{label}</StatusBadge>;
 }
