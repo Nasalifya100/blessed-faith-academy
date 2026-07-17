@@ -1,4 +1,4 @@
-// Public env vars are NOT set in this file (keeps keys out of git).
+// Public Supabase keys stay in the Cloudflare Dashboard (not here).
 //
 // Runtime — Cloudflare Dashboard → Workers → bfa-sms-staging →
 //           Settings → Variables and Secrets
@@ -18,6 +18,9 @@
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
+  "vars": {
+    "ALLOW_PRODUCTION_RESET": "false"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
