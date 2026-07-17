@@ -13,6 +13,11 @@ import { cookies } from "next/headers";
  * enforced by the database, not by which key is used.
  */
 export async function createSupabaseServerClient() {
+  // Opt into dynamic rendering BEFORE reading env. If env validation ran
+  // first and threw during `next build` static generation, Next reported a
+  // prerender failure instead of marking the route dynamic via cookies().
+  const cookieStore = await cookies();
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -21,8 +26,6 @@ export async function createSupabaseServerClient() {
       "Missing Supabase environment variables. Check that NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in .env.local.",
     );
   }
-
-  const cookieStore = await cookies();
 
   return createServerClient(url, anonKey, {
     cookies: {

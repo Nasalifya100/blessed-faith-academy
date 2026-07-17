@@ -12,6 +12,13 @@ import {
 } from "@/features/dashboard/components/dashboard-nav";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 
+/**
+ * All dashboard routes are session-scoped (cookies + RLS). They must never be
+ * statically prerendered: build-time execution would call Supabase before a
+ * request exists, and would fail when env is only available at Worker runtime.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function DashboardLayout({
   children,
 }: {
