@@ -26,17 +26,42 @@ export const STUDENT_PROFILE_ROLES: readonly StaffRole[] = [
   "teacher",
 ] as const;
 
+const ALL_STAFF_ROLES: readonly StaffRole[] = [
+  "administrator",
+  "headteacher",
+  "bursar",
+  "secretary",
+  "teacher",
+] as const;
+
+/**
+ * Normalize a profile role from the DB / claims so casing or whitespace
+ * never hides Administrator actions.
+ */
+export function normalizeStaffRole(
+  role: string | null | undefined,
+): StaffRole | null {
+  if (!role) return null;
+  const normalized = role.trim().toLowerCase();
+  return (ALL_STAFF_ROLES as readonly string[]).includes(normalized)
+    ? (normalized as StaffRole)
+    : null;
+}
+
 export function canManageStudents(role: StaffRole | null | undefined): boolean {
-  return Boolean(role && STUDENT_MANAGER_ROLES.includes(role));
+  const normalized = normalizeStaffRole(role);
+  return Boolean(normalized && STUDENT_MANAGER_ROLES.includes(normalized));
 }
 
 export function canManageFees(role: StaffRole | null | undefined): boolean {
-  return Boolean(role && FEE_MANAGER_ROLES.includes(role));
+  const normalized = normalizeStaffRole(role);
+  return Boolean(normalized && FEE_MANAGER_ROLES.includes(normalized));
 }
 
 /**
  * Full “Add Existing Student” migration (student create + opening charges).
- * Requires both student-management and fee-management roles.
+ * Requires both student-management and fee-management roles
+ * (administrator and headteacher).
  */
 export function canMigrateExistingStudents(
   role: StaffRole | null | undefined,
@@ -46,14 +71,16 @@ export function canMigrateExistingStudents(
 
 /** Browse the Students list and search directory. */
 export function canBrowseStudents(role: StaffRole | null | undefined): boolean {
-  return Boolean(role && STUDENT_DIRECTORY_ROLES.includes(role));
+  const normalized = normalizeStaffRole(role);
+  return Boolean(normalized && STUDENT_DIRECTORY_ROLES.includes(normalized));
 }
 
 /** Open an individual student profile. */
 export function canViewStudentProfile(
   role: StaffRole | null | undefined,
 ): boolean {
-  return Boolean(role && STUDENT_PROFILE_ROLES.includes(role));
+  const normalized = normalizeStaffRole(role);
+  return Boolean(normalized && STUDENT_PROFILE_ROLES.includes(normalized));
 }
 
 /** Alias: medical data is limited to student managers. */

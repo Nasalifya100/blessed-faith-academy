@@ -91,42 +91,61 @@ export default async function StudentsPage({
             {hasFilters ? " match your filters" : " in view"}
           </>
         }
-        actions={
-          canManage || canMigrate ? (
-            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-              <div className="flex flex-wrap items-center gap-2">
-                {canManage ? (
-                  <Link
-                    href="/dashboard/students/new"
-                    className={cn(buttonVariants(), "min-h-10 gap-2")}
-                  >
-                    <Plus className="size-4" aria-hidden />
-                    Enrol New Student
-                  </Link>
-                ) : null}
-                {canMigrate ? (
-                  <Link
-                    href="/dashboard/students/existing/new"
-                    className={cn(
-                      buttonVariants({ variant: "outline" }),
-                      "min-h-10 gap-2",
-                    )}
-                  >
-                    <UserRoundPlus className="size-4" aria-hidden />
-                    Add Existing Student
-                  </Link>
-                ) : null}
-              </div>
+      />
+
+      {canManage || canMigrate ? (
+        <section
+          aria-label="Add students"
+          className="rounded-xl border bg-card p-4 shadow-sm sm:p-5"
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold tracking-tight">
+                Add students
+              </p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                For learners who joined the school before the digital system
+                was introduced.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              {canManage ? (
+                <Link
+                  href="/dashboard/students/new"
+                  className={cn(
+                    buttonVariants(),
+                    "min-h-11 justify-center gap-2",
+                  )}
+                >
+                  <Plus className="size-4" aria-hidden />
+                  Enrol New Student
+                </Link>
+              ) : null}
               {canMigrate ? (
-                <p className="max-w-sm text-xs text-muted-foreground sm:text-right">
-                  Use Add Existing Student for learners who joined the school
-                  before the digital system was introduced.
-                </p>
+                <Link
+                  href="/dashboard/students/existing/new"
+                  className={cn(
+                    buttonVariants({ variant: "secondary" }),
+                    "min-h-11 justify-center gap-2 border",
+                  )}
+                >
+                  <UserRoundPlus className="size-4" aria-hidden />
+                  Add Existing Student
+                </Link>
               ) : null}
             </div>
-          ) : null
-        }
-      />
+          </div>
+          {canMigrate ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Use <span className="font-medium text-foreground">Add Existing Student</span>{" "}
+              for learners who joined the school before the digital system was
+              introduced. Use{" "}
+              <span className="font-medium text-foreground">Enrol New Student</span>{" "}
+              for new admissions.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section
         aria-label="Search and filters"
@@ -288,8 +307,8 @@ export default async function StudentsPage({
                   <Link
                     href="/dashboard/students/existing/new"
                     className={cn(
-                      buttonVariants({ variant: "outline" }),
-                      "min-h-10 gap-2",
+                      buttonVariants({ variant: "secondary" }),
+                      "min-h-11 gap-2 border",
                     )}
                   >
                     <UserRoundPlus className="size-4" aria-hidden />

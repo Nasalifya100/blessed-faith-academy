@@ -223,4 +223,9 @@ describe("canMigrateExistingStudents", () => {
     expect(canMigrateExistingStudents("teacher")).toBe(false);
     expect(canMigrateExistingStudents(null)).toBe(false);
   });
+
+  it("still allows Administrator when role casing differs", () => {
+    expect(canMigrateExistingStudents("Administrator" as never)).toBe(true);
+    expect(canMigrateExistingStudents(" ADMINISTRATOR " as never)).toBe(true);
+  });
 });
