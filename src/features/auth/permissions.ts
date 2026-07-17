@@ -95,3 +95,15 @@ export function canManageApplications(
 ): boolean {
   return canManageStudents(role);
 }
+
+/** Production Reset is Administrator-only. */
+export function canRunProductionReset(
+  role: StaffRole | null | undefined,
+): boolean {
+  return normalizeStaffRole(role) === "administrator";
+}
+
+/** Server-only env gate (never NEXT_PUBLIC). */
+export function isProductionResetEnvEnabled(): boolean {
+  return process.env.ALLOW_PRODUCTION_RESET === "true";
+}

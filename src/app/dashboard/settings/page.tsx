@@ -6,11 +6,13 @@ import {
   CalendarDays,
   ClipboardList,
   Layers,
+  ShieldAlert,
   Users,
   Wallet,
 } from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { isProductionResetEnvEnabled } from "@/features/auth/permissions";
 import { listAcademicYearsAndTerms } from "@/features/config/queries";
 import { SetCurrentPeriodPanel } from "@/features/config/components/set-current-period-panel";
 import { getFeesSetupData } from "@/features/fees/queries";
@@ -97,6 +99,7 @@ export default async function SettingsPage() {
   const activeStaff = staff.filter((m) => m.is_active).length;
   const feeStructures = fees.items.length;
   const activeRules = rules.filter((r) => r.isActive).length;
+  const resetEnabled = isProductionResetEnvEnabled();
 
   const requirementsByBand = new Map<string, typeof fees.requirements>();
   for (const item of fees.requirements) {
@@ -176,6 +179,48 @@ export default async function SettingsPage() {
           </a>
         ))}
       </nav>
+
+      <Card id="system-preparation" className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldAlert className="size-5 text-muted-foreground" aria-hidden />
+            System Preparation
+          </CardTitle>
+          <CardDescription>
+            Tools for preparing this project for real school data. Destructive
+            controls stay disabled until explicitly unlocked on the server.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Production Reset</p>
+            <p className="max-w-xl text-sm text-muted-foreground">
+              Permanently remove test operational data while preserving staff,
+              authentication, academic setup, and fee configuration.
+            </p>
+            {!resetEnabled ? (
+              <p className="text-xs text-muted-foreground">
+                Reset unavailable —{" "}
+                <code className="rounded bg-muted px-1 py-0.5">
+                  ALLOW_PRODUCTION_RESET
+                </code>{" "}
+                is not enabled.
+              </p>
+            ) : (
+              <StatusBadge tone="warning">Reset unlocked</StatusBadge>
+            )}
+          </div>
+          <Link
+            href="/dashboard/settings/production-reset"
+            className={cn(
+              buttonVariants({ variant: resetEnabled ? "destructive" : "outline" }),
+              "min-h-11 shrink-0",
+            )}
+          >
+            Open Production Reset
+          </Link>
+        </CardContent>
+      </Card>
 
       <Card id="school-information" className="scroll-mt-6 shadow-sm">
         <CardHeader>
