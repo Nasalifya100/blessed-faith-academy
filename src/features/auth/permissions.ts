@@ -7,6 +7,13 @@ export const STUDENT_MANAGER_ROLES: readonly StaffRole[] = [
   "secretary",
 ] as const;
 
+/** Roles that may manage fees, charges, and payments. */
+export const FEE_MANAGER_ROLES: readonly StaffRole[] = [
+  "administrator",
+  "bursar",
+  "headteacher",
+] as const;
+
 /** Directory / list access (managers + bursar for fee look-ups). */
 export const STUDENT_DIRECTORY_ROLES: readonly StaffRole[] = [
   ...STUDENT_MANAGER_ROLES,
@@ -21,6 +28,20 @@ export const STUDENT_PROFILE_ROLES: readonly StaffRole[] = [
 
 export function canManageStudents(role: StaffRole | null | undefined): boolean {
   return Boolean(role && STUDENT_MANAGER_ROLES.includes(role));
+}
+
+export function canManageFees(role: StaffRole | null | undefined): boolean {
+  return Boolean(role && FEE_MANAGER_ROLES.includes(role));
+}
+
+/**
+ * Full “Add Existing Student” migration (student create + opening charges).
+ * Requires both student-management and fee-management roles.
+ */
+export function canMigrateExistingStudents(
+  role: StaffRole | null | undefined,
+): boolean {
+  return canManageStudents(role) && canManageFees(role);
 }
 
 /** Browse the Students list and search directory. */

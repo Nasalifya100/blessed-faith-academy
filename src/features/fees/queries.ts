@@ -186,6 +186,11 @@ export interface StatementCharge {
   status: string;
   termName: string | null;
   createdAt: string;
+  chargeSource: "NORMAL" | "LEGACY_OPENING_BALANCE";
+  legacyOriginalAmount: number | null;
+  legacyPreviouslyPaidAmount: number | null;
+  legacyNotes: string | null;
+  migratedAt: string | null;
 }
 
 export interface StatementPayment {
@@ -243,7 +248,7 @@ export async function getStudentFeeStatement(
     const { data: chargeRows } = await supabase
       .from("charges")
       .select(
-        "id, description, amount, status, created_at, fee_item:fee_items(name, category, is_optional), term:terms(name)",
+        "id, description, amount, status, created_at, charge_source, legacy_original_amount, legacy_previously_paid_amount, legacy_notes, migrated_at, fee_item:fee_items(name, category, is_optional), term:terms(name)",
       )
       .eq("student_id", studentId)
       .eq("academic_year_id", year.id)
@@ -257,6 +262,11 @@ export async function getStudentFeeStatement(
         amount: number | string;
         status: string;
         created_at: string;
+        charge_source: string | null;
+        legacy_original_amount: number | string | null;
+        legacy_previously_paid_amount: number | string | null;
+        legacy_notes: string | null;
+        migrated_at: string | null;
         fee_item: {
           name: string;
           category: string;
@@ -264,17 +274,34 @@ export async function getStudentFeeStatement(
         } | null;
         term: { name: string } | null;
       }[] | null) ?? []
-    ).map((row) => ({
-      id: row.id,
-      description: row.fee_item?.name ?? row.description ?? "Charge",
-      feeItemName: row.fee_item?.name ?? "-",
-      category: row.fee_item?.category ?? "other",
-      isOptional: row.fee_item?.is_optional ?? false,
-      amount: fromNgwee(toNgwee(row.amount)),
-      status: row.status,
-      termName: row.term?.name ?? null,
-      createdAt: row.created_at,
-    }));
+    ).map((row) => {
+      const isLegacy = row.charge_source === "LEGACY_OPENING_BALANCE";
+      return {
+        id: row.id,
+        description: isLegacy
+          ? row.description?.trim() ||
+            `Opening balance — ${row.fee_item?.name ?? "Fee"}`
+          : (row.fee_item?.name ?? row.description ?? "Charge"),
+        feeItemName: row.fee_item?.name ?? "-",
+        category: row.fee_item?.category ?? "other",
+        isOptional: row.fee_item?.is_optional ?? false,
+        amount: fromNgwee(toNgwee(row.amount)),
+        status: row.status,
+        termName: row.term?.name ?? null,
+        createdAt: row.created_at,
+        chargeSource: isLegacy ? "LEGACY_OPENING_BALANCE" : "NORMAL",
+        legacyOriginalAmount:
+          row.legacy_original_amount != null
+            ? fromNgwee(toNgwee(row.legacy_original_amount))
+            : null,
+        legacyPreviouslyPaidAmount:
+          row.legacy_previously_paid_amount != null
+            ? fromNgwee(toNgwee(row.legacy_previously_paid_amount))
+            : null,
+        legacyNotes: row.legacy_notes,
+        migratedAt: row.migrated_at,
+      };
+    });
   }
 
   const { data: paymentRows } = await supabase

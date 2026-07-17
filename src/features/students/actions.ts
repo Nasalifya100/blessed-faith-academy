@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { canMigrateExistingStudents } from "@/features/auth/permissions";
+import {
+  createExistingStudentSchema,
+  toExistingStudentRpcPayload,
+} from "@/features/students/existing-student-schemas";
 import {
   createStudentSchema,
   mapGuardianPayload,
@@ -117,6 +122,119 @@ export async function createStudentAction(
     studentId: typeof studentId === "string" ? studentId : null,
     nextAdmissionNumber:
       typeof nextSuggested === "string" ? nextSuggested : null,
+  };
+}
+
+export interface CreateExistingStudentResult {
+  error: string | null;
+  studentId: string | null;
+  openingTotal: number | null;
+}
+
+async function assertExistingStudentMigrator(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const current = await getCurrentUser();
+  if (!current) {
+    return { ok: false, error: SESSION_ERROR };
+  }
+  if (current.profileLoadFailed) {
+    return { ok: false, error: CONNECTION_ERROR };
+  }
+  const role = current.profile?.role;
+  if (current.profile?.is_active && canMigrateExistingStudents(role)) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    error:
+      "You are not authorized to add existing students. This requires both student and fee management permission.",
+  };
+}
+
+function mapExistingStudentError(message: string): string {
+  const lower = message.toLowerCase();
+  if (
+    message.includes("students_school_admission_number_lower_uidx") ||
+    message.includes("students_school_id_admission_number_key") ||
+    lower.includes("admission number is already")
+  ) {
+    return "That admission number is already in use. Please use a different one.";
+  }
+  if (lower.includes("duplicate opening charge")) {
+    return "Duplicate opening charge for the same fee type and period.";
+  }
+  if (lower.includes("previously paid cannot exceed")) {
+    return "Previously paid cannot exceed the original amount.";
+  }
+  if (lower.includes("cannot be in the future")) {
+    return "Admission date cannot be in the future.";
+  }
+  if (lower.includes("not authorized")) {
+    return "You are not authorized to add existing students. This requires both student and fee management permission.";
+  }
+  if (lower.includes("generated charge already exists")) {
+    return message;
+  }
+  return message;
+}
+
+export async function createExistingStudentAction(
+  input: unknown,
+): Promise<CreateExistingStudentResult> {
+  const auth = await assertExistingStudentMigrator();
+  if (!auth.ok) {
+    return { error: auth.error, studentId: null, openingTotal: null };
+  }
+
+  const parsed = createExistingStudentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.issues[0]?.message ??
+        "Please check the form and try again.",
+      studentId: null,
+      openingTotal: null,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const payload = toExistingStudentRpcPayload(parsed.data);
+
+  const { data, error } = await supabase.rpc(
+    "create_existing_student_migration",
+    { p_payload: payload },
+  );
+
+  if (error) {
+    return {
+      error: mapExistingStudentError(error.message),
+      studentId: null,
+      openingTotal: null,
+    };
+  }
+
+  const result = data as {
+    student_id?: string;
+    opening_total?: number | string;
+  } | null;
+
+  const studentId =
+    typeof result?.student_id === "string" ? result.student_id : null;
+  const openingTotal =
+    result?.opening_total != null ? Number(result.opening_total) : 0;
+
+  if (studentId) {
+    revalidatePath("/dashboard/students");
+    revalidatePath(`/dashboard/students/${studentId}`);
+    revalidatePath("/dashboard/fees");
+    revalidatePath("/dashboard/reports/fee-balances");
+  }
+
+  return {
+    error: null,
+    studentId,
+    openingTotal: Number.isFinite(openingTotal) ? openingTotal : 0,
   };
 }
 

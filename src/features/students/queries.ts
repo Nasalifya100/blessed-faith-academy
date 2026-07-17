@@ -234,6 +234,11 @@ export interface StudentProfile {
   gender: string;
   status: string;
   enrollmentDate: string;
+  recordOrigin: "NORMAL" | "LEGACY_MANUAL";
+  migratedAt: string | null;
+  createdAt: string;
+  legacyReference: string | null;
+  migrationNotes: string | null;
   placeOfBirth: string | null;
   religiousDenomination: string | null;
   previousSchool: string | null;
@@ -286,7 +291,7 @@ export async function getStudentProfile(
   const { data: student } = await supabase
     .from("students")
     .select(
-      "id, admission_number, first_name, middle_name, last_name, date_of_birth, gender, status, enrollment_date, place_of_birth, religious_denomination, previous_school, proposed_admission_date, is_zambian_citizen, archived_at, archive_reason",
+      "id, admission_number, first_name, middle_name, last_name, date_of_birth, gender, status, enrollment_date, place_of_birth, religious_denomination, previous_school, proposed_admission_date, is_zambian_citizen, archived_at, archive_reason, record_origin, migrated_at, created_at, legacy_reference, migration_notes",
     )
     .eq("id", id)
     .maybeSingle();
@@ -373,6 +378,11 @@ export async function getStudentProfile(
     is_zambian_citizen: boolean | null;
     archived_at: string | null;
     archive_reason: string | null;
+    record_origin: string | null;
+    migrated_at: string | null;
+    created_at: string;
+    legacy_reference: string | null;
+    migration_notes: string | null;
   };
 
   const medicalRow = medical as {
@@ -394,6 +404,12 @@ export async function getStudentProfile(
     gender: student_.gender,
     status: student_.status,
     enrollmentDate: student_.enrollment_date,
+    recordOrigin:
+      student_.record_origin === "LEGACY_MANUAL" ? "LEGACY_MANUAL" : "NORMAL",
+    migratedAt: student_.migrated_at,
+    createdAt: student_.created_at,
+    legacyReference: student_.legacy_reference,
+    migrationNotes: student_.migration_notes,
     placeOfBirth: student_.place_of_birth,
     religiousDenomination: student_.religious_denomination,
     previousSchool: student_.previous_school,

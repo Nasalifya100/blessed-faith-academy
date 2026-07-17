@@ -105,9 +105,48 @@ function canCancelOptionalCharge(
 ): boolean {
   return (
     canManageFees &&
+    charge.chargeSource !== "LEGACY_OPENING_BALANCE" &&
     charge.isOptional &&
     charge.status === "outstanding" &&
     (charge.category === "meal" || charge.category === "uniform")
+  );
+}
+
+function formatChargeEnteredOn(value: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-ZM", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function ChargeLegacyMeta({ charge }: { charge: StatementCharge }) {
+  if (charge.chargeSource !== "LEGACY_OPENING_BALANCE") return null;
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge tone="info" label="Legacy record">
+          Legacy record
+        </StatusBadge>
+        <span>Source: Legacy opening balance</span>
+      </div>
+      {charge.legacyOriginalAmount != null ? (
+        <p>
+          Original {formatKwacha(charge.legacyOriginalAmount)}
+          {charge.legacyPreviouslyPaidAmount != null
+            ? ` · Previously paid ${formatKwacha(charge.legacyPreviouslyPaidAmount)}`
+            : ""}
+          {` · Outstanding ${formatKwacha(charge.amount)}`}
+        </p>
+      ) : null}
+      {charge.migratedAt ? (
+        <p>Entered {formatChargeEnteredOn(charge.migratedAt)}</p>
+      ) : null}
+      {charge.legacyNotes ? <p>{charge.legacyNotes}</p> : null}
+    </div>
   );
 }
 
@@ -115,16 +154,20 @@ function buildTimeline(statement: StudentFeeStatement): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
   for (const charge of statement.charges) {
+    const isLegacy = charge.chargeSource === "LEGACY_OPENING_BALANCE";
     events.push({
       id: `charge-${charge.id}`,
-      at: charge.createdAt,
-      title:
-        charge.status === "waived"
+      at: charge.migratedAt ?? charge.createdAt,
+      title: isLegacy
+        ? "Opening balance"
+        : charge.status === "waived"
           ? "Charge waived"
           : "Charge created",
-      detail: `${charge.description}${
-        charge.termName ? ` · ${charge.termName}` : ""
-      } · ${categoryLabel(charge.category)}`,
+      detail: isLegacy
+        ? `${charge.description} · Legacy opening balance · ${formatKwacha(charge.amount)}`
+        : `${charge.description}${
+            charge.termName ? ` · ${charge.termName}` : ""
+          } · ${categoryLabel(charge.category)}`,
       amount: charge.amount,
       kind: charge.status === "waived" ? "waived" : "charge",
     });
@@ -280,12 +323,24 @@ export function FeeStatement({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 space-y-1">
-                          <p className="font-medium">{charge.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {categoryLabel(charge.category)}
-                            {charge.termName ? ` · ${charge.termName}` : ""}
-                            {charge.isOptional ? " · Optional" : ""}
+                          <p className="font-medium">
+                            {charge.chargeSource === "LEGACY_OPENING_BALANCE"
+                              ? "Opening Balance"
+                              : charge.description}
                           </p>
+                          {charge.chargeSource === "LEGACY_OPENING_BALANCE" ? (
+                            <p className="text-xs text-muted-foreground">
+                              {charge.feeItemName}
+                              {charge.termName ? ` · ${charge.termName}` : ""}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              {categoryLabel(charge.category)}
+                              {charge.termName ? ` · ${charge.termName}` : ""}
+                              {charge.isOptional ? " · Optional" : ""}
+                            </p>
+                          )}
+                          <ChargeLegacyMeta charge={charge} />
                         </div>
                         <ChargeStatusBadge status={charge.status} />
                       </div>
@@ -351,14 +406,29 @@ export function FeeStatement({
                             className="transition-colors hover:bg-muted/40"
                           >
                             <TableCell className="font-medium">
-                              {charge.description}
+                              <div className="space-y-1">
+                                <p>
+                                  {charge.chargeSource ===
+                                  "LEGACY_OPENING_BALANCE"
+                                    ? "Opening Balance"
+                                    : charge.description}
+                                </p>
+                                <ChargeLegacyMeta charge={charge} />
+                              </div>
                             </TableCell>
                             <TableCell>
-                              <StatusBadge
-                                tone={charge.isOptional ? "info" : "neutral"}
-                              >
-                                {categoryLabel(charge.category)}
-                              </StatusBadge>
+                              {charge.chargeSource ===
+                              "LEGACY_OPENING_BALANCE" ? (
+                                <StatusBadge tone="info">
+                                  Legacy record
+                                </StatusBadge>
+                              ) : (
+                                <StatusBadge
+                                  tone={charge.isOptional ? "info" : "neutral"}
+                                >
+                                  {categoryLabel(charge.category)}
+                                </StatusBadge>
+                              )}
                             </TableCell>
                             <TableCell>{charge.termName ?? "Year"}</TableCell>
                             <TableCell>

@@ -220,6 +220,11 @@ export default async function StudentProfilePage({
                     {student.fullName}
                   </h1>
                   <StudentStatusBadge status={student.status} />
+                  {student.recordOrigin === "LEGACY_MANUAL" ? (
+                    <StatusBadge tone="info" label="Legacy record">
+                      Legacy record
+                    </StatusBadge>
+                  ) : null}
                 </div>
                 <p className="font-mono text-sm text-muted-foreground">
                   {student.admissionNumber}
@@ -234,9 +239,21 @@ export default async function StudentProfilePage({
                     value={primaryGuardian?.fullName ?? "—"}
                   />
                   <Detail
-                    label="Enrollment date"
+                    label={
+                      student.recordOrigin === "LEGACY_MANUAL"
+                        ? "Student since"
+                        : "Enrollment date"
+                    }
                     value={formatDate(student.enrollmentDate)}
                   />
+                  {student.recordOrigin === "LEGACY_MANUAL" ? (
+                    <Detail
+                      label="Digitised"
+                      value={formatDate(
+                        (student.migratedAt ?? student.createdAt).slice(0, 10),
+                      )}
+                    />
+                  ) : null}
                 </dl>
                 {student.status === "withdrawn" && student.archiveReason ? (
                   <p className="text-sm text-muted-foreground">

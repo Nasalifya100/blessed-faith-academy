@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { GraduationCap, Plus, Search, Users } from "lucide-react";
+import { GraduationCap, Plus, Search, UserRoundPlus, Users } from "lucide-react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
   canBrowseStudents,
   canManageStudents,
+  canMigrateExistingStudents,
 } from "@/features/auth/permissions";
 import {
   getCurrentYearClasses,
@@ -67,6 +68,7 @@ export default async function StudentsPage({
     redirect("/dashboard");
   }
   const canManage = canManageStudents(role);
+  const canMigrate = canMigrateExistingStudents(role);
 
   const [{ classes }, students] = await Promise.all([
     getCurrentYearClasses(),
@@ -90,14 +92,38 @@ export default async function StudentsPage({
           </>
         }
         actions={
-          canManage ? (
-            <Link
-              href="/dashboard/students/new"
-              className={cn(buttonVariants(), "gap-2")}
-            >
-              <Plus className="size-4" aria-hidden />
-              Add student
-            </Link>
+          canManage || canMigrate ? (
+            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+              <div className="flex flex-wrap items-center gap-2">
+                {canManage ? (
+                  <Link
+                    href="/dashboard/students/new"
+                    className={cn(buttonVariants(), "min-h-10 gap-2")}
+                  >
+                    <Plus className="size-4" aria-hidden />
+                    Enrol New Student
+                  </Link>
+                ) : null}
+                {canMigrate ? (
+                  <Link
+                    href="/dashboard/students/existing/new"
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "min-h-10 gap-2",
+                    )}
+                  >
+                    <UserRoundPlus className="size-4" aria-hidden />
+                    Add Existing Student
+                  </Link>
+                ) : null}
+              </div>
+              {canMigrate ? (
+                <p className="max-w-sm text-xs text-muted-foreground sm:text-right">
+                  Use Add Existing Student for learners who joined the school
+                  before the digital system was introduced.
+                </p>
+              ) : null}
+            </div>
           ) : null
         }
       />
@@ -250,13 +276,27 @@ export default async function StudentsPage({
           }
           action={
             canManage && !hasFilters ? (
-              <Link
-                href="/dashboard/students/new"
-                className={cn(buttonVariants(), "gap-2")}
-              >
-                <Plus className="size-4" aria-hidden />
-                Add student
-              </Link>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Link
+                  href="/dashboard/students/new"
+                  className={cn(buttonVariants(), "min-h-10 gap-2")}
+                >
+                  <Plus className="size-4" aria-hidden />
+                  Enrol New Student
+                </Link>
+                {canMigrate ? (
+                  <Link
+                    href="/dashboard/students/existing/new"
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "min-h-10 gap-2",
+                    )}
+                  >
+                    <UserRoundPlus className="size-4" aria-hidden />
+                    Add Existing Student
+                  </Link>
+                ) : null}
+              </div>
             ) : hasFilters ? (
               <Link
                 href="/dashboard/students"
