@@ -211,6 +211,16 @@ export interface StatementPaymentAllocation {
   reversedAt: string | null;
 }
 
+export interface PaymentFinanceSnapshot {
+  balanceBefore: number;
+  balanceAfter: number;
+  availableCreditBefore: number;
+  availableCreditAfter: number;
+  allocatedAmount: number;
+  outstandingAfter: number;
+  creditCreated: number;
+}
+
 export interface StatementPayment {
   id: string;
   amount: number;
@@ -223,6 +233,20 @@ export interface StatementPayment {
   voidReason: string | null;
   voidedAt: string | null;
   allocations: StatementPaymentAllocation[];
+  /** Immutable payment-time snapshot when available; never live-recalculated. */
+  snapshot: PaymentFinanceSnapshot | null;
+}
+
+export interface FinanceAuditEvent {
+  id: string;
+  eventType: string;
+  amount: number | null;
+  reason: string | null;
+  createdAt: string;
+  actorName: string | null;
+  chargeId: string | null;
+  paymentId: string | null;
+  metadata: Record<string, unknown>;
 }
 
 export interface StudentFeeStatement {
@@ -237,6 +261,8 @@ export interface StudentFeeStatement {
   payments: StatementPayment[];
   /** Voided/reversed payments (history; excluded from totals). */
   voidedPayments: StatementPayment[];
+  /** Append-only finance audit events for this student (e.g. optional cancel). */
+  financeAuditEvents: FinanceAuditEvent[];
   totalCharged: number;
   totalPaid: number;
   totalAllocated: number;
@@ -403,6 +429,7 @@ export async function getStudentFeeStatement(
     ((paymentRows as { id: string }[] | null) ?? []).map((row) => row.id);
 
   const allocationsByPayment = new Map<string, StatementPaymentAllocation[]>();
+  const snapshotsByPayment = new Map<string, PaymentFinanceSnapshot>();
   if (paymentIds.length > 0) {
     const { data: paymentAllocRows } = await supabase
       .from("payment_allocations")
@@ -443,6 +470,34 @@ export async function getStudentFeeStatement(
       });
       allocationsByPayment.set(row.payment_id, list);
     }
+
+    const { data: snapshotRows } = await supabase
+      .from("payment_finance_snapshots")
+      .select(
+        "payment_id, balance_before, balance_after, available_credit_before, available_credit_after, allocated_amount, outstanding_after, credit_created",
+      )
+      .in("payment_id", paymentIds);
+
+    for (const row of (snapshotRows as {
+      payment_id: string;
+      balance_before: number | string;
+      balance_after: number | string;
+      available_credit_before: number | string;
+      available_credit_after: number | string;
+      allocated_amount: number | string;
+      outstanding_after: number | string;
+      credit_created: number | string;
+    }[] | null) ?? []) {
+      snapshotsByPayment.set(row.payment_id, {
+        balanceBefore: money(row.balance_before),
+        balanceAfter: money(row.balance_after),
+        availableCreditBefore: money(row.available_credit_before),
+        availableCreditAfter: money(row.available_credit_after),
+        allocatedAmount: money(row.allocated_amount),
+        outstandingAfter: money(row.outstanding_after),
+        creditCreated: money(row.credit_created),
+      });
+    }
   }
 
   const mappedPayments: StatementPayment[] = (
@@ -459,12 +514,16 @@ export async function getStudentFeeStatement(
   ).map((row) => {
     const amount = money(row.amount);
     const allocations = allocationsByPayment.get(row.id) ?? [];
+    const snapshot = snapshotsByPayment.get(row.id) ?? null;
     const activeAllocNgwee = allocations
       .filter((a) => !a.reversedAt)
       .reduce((sum, a) => sum + toNgwee(a.amount), 0);
-    const amountAllocated = fromNgwee(activeAllocNgwee);
-    const unallocatedCredit =
-      row.status === "completed"
+    const amountAllocated = snapshot
+      ? snapshot.allocatedAmount
+      : fromNgwee(activeAllocNgwee);
+    const unallocatedCredit = snapshot
+      ? snapshot.creditCreated
+      : row.status === "completed"
         ? fromNgwee(Math.max(0, toNgwee(amount) - activeAllocNgwee))
         : 0;
 
@@ -480,11 +539,65 @@ export async function getStudentFeeStatement(
       voidReason: row.void_reason,
       voidedAt: row.voided_at,
       allocations,
+      snapshot,
     };
   });
 
   const payments = mappedPayments.filter((p) => p.status === "completed");
   const voidedPayments = mappedPayments.filter((p) => p.status === "voided");
+
+  const { data: auditRows } = await supabase
+    .from("finance_event_audits")
+    .select(
+      "id, event_type, amount, reason, created_at, charge_id, payment_id, metadata, actor_id",
+    )
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false });
+
+  const actorIds = [
+    ...new Set(
+      ((auditRows as { actor_id: string | null }[] | null) ?? [])
+        .map((row) => row.actor_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const actorNameById = new Map<string, string>();
+  if (actorIds.length > 0) {
+    const { data: actorRows } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", actorIds);
+    for (const row of (actorRows as {
+      id: string;
+      full_name: string | null;
+    }[] | null) ?? []) {
+      if (row.full_name) actorNameById.set(row.id, row.full_name);
+    }
+  }
+
+  const financeAuditEvents: FinanceAuditEvent[] = (
+    (auditRows as {
+      id: string;
+      event_type: string;
+      amount: number | string | null;
+      reason: string | null;
+      created_at: string;
+      charge_id: string | null;
+      payment_id: string | null;
+      metadata: Record<string, unknown> | null;
+      actor_id: string | null;
+    }[] | null) ?? []
+  ).map((row) => ({
+    id: row.id,
+    eventType: row.event_type,
+    amount: row.amount != null ? money(row.amount) : null,
+    reason: row.reason,
+    createdAt: row.created_at,
+    actorName: row.actor_id ? (actorNameById.get(row.actor_id) ?? null) : null,
+    chargeId: row.charge_id,
+    paymentId: row.payment_id,
+    metadata: row.metadata ?? {},
+  }));
 
   const totalCharged =
     summary.total_active_charges != null
@@ -529,6 +642,7 @@ export async function getStudentFeeStatement(
     currentYearCharges,
     payments,
     voidedPayments,
+    financeAuditEvents,
     totalCharged,
     totalPaid,
     totalAllocated,
@@ -870,16 +984,31 @@ export interface PaymentReceipt {
     id: string;
     fullName: string;
     admissionNumber: string;
+    gradeName: string | null;
+    className: string | null;
   };
+  payer: {
+    fullName: string;
+    relationship: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
   school: {
     name: string;
+    motto: string | null;
     address: string | null;
     phone: string | null;
+    email: string | null;
+    logoUrl: string | null;
   };
-  /** Remaining outstanding charges after this payment (authoritative). */
-  balanceAfter: number;
-  /** Available pupil credit after this payment. */
-  availableCreditAfter: number;
+  /** Immutable snapshot when present; null for legacy payments before polish. */
+  snapshot: PaymentFinanceSnapshot | null;
+  /** Snapshot balances only — never live-recalculated for historical receipts. */
+  balanceBefore: number | null;
+  balanceAfter: number | null;
+  availableCreditBefore: number | null;
+  availableCreditAfter: number | null;
+  outstandingAfter: number | null;
   allocations: StatementPaymentAllocation[];
 }
 
@@ -891,7 +1020,7 @@ export async function getPaymentReceipt(
   const { data: row } = await supabase
     .from("payments")
     .select(
-      "id, receipt_number, amount, method, reference_number, paid_on, notes, recorded_by, status, void_reason, voided_at, voided_by, student:students(id, first_name, middle_name, last_name, admission_number), school:schools(name, address, phone)",
+      "id, receipt_number, amount, method, reference_number, paid_on, notes, recorded_by, status, void_reason, voided_at, voided_by, student:students(id, first_name, middle_name, last_name, admission_number), school:schools(name, motto, address, phone, email, logo_url)",
     )
     .eq("id", paymentId)
     .maybeSingle();
@@ -922,8 +1051,11 @@ export async function getPaymentReceipt(
     } | null;
     school: {
       name: string;
+      motto: string | null;
       address: string | null;
       phone: string | null;
+      email: string | null;
+      logo_url: string | null;
     } | null;
   };
 
@@ -955,18 +1087,147 @@ export async function getPaymentReceipt(
     voidedByName = profile?.full_name ?? null;
   }
 
-  const statement = await getStudentFeeStatement(payment.student.id);
-  const statementPayment =
-    statement.payments.find((row) => row.id === payment.id) ??
-    statement.voidedPayments.find((row) => row.id === payment.id);
+  const { data: snapshotRow } = await supabase
+    .from("payment_finance_snapshots")
+    .select(
+      "balance_before, balance_after, available_credit_before, available_credit_after, allocated_amount, outstanding_after, credit_created",
+    )
+    .eq("payment_id", payment.id)
+    .maybeSingle();
 
+  const snapshot = snapshotRow
+    ? {
+        balanceBefore: money(
+          (snapshotRow as { balance_before: number | string }).balance_before,
+        ),
+        balanceAfter: money(
+          (snapshotRow as { balance_after: number | string }).balance_after,
+        ),
+        availableCreditBefore: money(
+          (snapshotRow as { available_credit_before: number | string })
+            .available_credit_before,
+        ),
+        availableCreditAfter: money(
+          (snapshotRow as { available_credit_after: number | string })
+            .available_credit_after,
+        ),
+        allocatedAmount: money(
+          (snapshotRow as { allocated_amount: number | string })
+            .allocated_amount,
+        ),
+        outstandingAfter: money(
+          (snapshotRow as { outstanding_after: number | string })
+            .outstanding_after,
+        ),
+        creditCreated: money(
+          (snapshotRow as { credit_created: number | string }).credit_created,
+        ),
+      }
+    : null;
+
+  const { data: allocRows } = await supabase
+    .from("payment_allocations")
+    .select(
+      "id, charge_id, amount, created_at, reversed_at, charge:charges(description, fee_item:fee_items(name), term:terms(name), academic_year:academic_years(name))",
+    )
+    .eq("payment_id", payment.id)
+    .order("created_at", { ascending: true });
+
+  const allocations: StatementPaymentAllocation[] = (
+    (allocRows as {
+      id: string;
+      charge_id: string;
+      amount: number | string;
+      created_at: string;
+      reversed_at: string | null;
+      charge: {
+        description: string | null;
+        fee_item: { name: string } | null;
+        term: { name: string } | null;
+        academic_year: { name: string } | null;
+      } | null;
+    }[] | null) ?? []
+  ).map((row) => ({
+    id: row.id,
+    chargeId: row.charge_id,
+    chargeDescription:
+      row.charge?.fee_item?.name ?? row.charge?.description ?? "Charge",
+    feeItemName: row.charge?.fee_item?.name ?? "-",
+    academicYearName: row.charge?.academic_year?.name ?? null,
+    termName: row.charge?.term?.name ?? null,
+    amount: money(row.amount),
+    createdAt: row.created_at,
+    reversedAt: row.reversed_at,
+  }));
+
+  const activeAllocations = allocations.filter((a) => !a.reversedAt);
   const amount = money(payment.amount);
-  const amountAllocated = statementPayment?.amountAllocated ?? 0;
-  const creditCreated =
-    payment.status === "completed"
-      ? (statementPayment?.unallocatedCredit ??
-        fromNgwee(Math.max(0, toNgwee(amount) - toNgwee(amountAllocated))))
+  const amountAllocated = snapshot
+    ? snapshot.allocatedAmount
+    : fromNgwee(
+        activeAllocations.reduce((sum, a) => sum + toNgwee(a.amount), 0),
+      );
+  const creditCreated = snapshot
+    ? snapshot.creditCreated
+    : payment.status === "completed"
+      ? fromNgwee(Math.max(0, toNgwee(amount) - toNgwee(amountAllocated)))
       : 0;
+
+  const { data: guardianLink } = await supabase
+    .from("student_guardians")
+    .select(
+      "relationship, is_primary_contact, guardian:guardians(first_name, last_name, phone, email)",
+    )
+    .eq("student_id", payment.student.id)
+    .order("is_primary_contact", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const guardian = guardianLink as {
+    relationship: string | null;
+    is_primary_contact: boolean;
+    guardian: {
+      first_name: string;
+      last_name: string;
+      phone: string | null;
+      email: string | null;
+    } | null;
+  } | null;
+
+  const payer =
+    guardian?.guardian != null
+      ? {
+          fullName: [guardian.guardian.first_name, guardian.guardian.last_name]
+            .filter(Boolean)
+            .join(" "),
+          relationship: guardian.relationship,
+          phone: guardian.guardian.phone,
+          email: guardian.guardian.email,
+        }
+      : null;
+
+  const { data: enrolment } = await supabase
+    .from("student_class_enrollments")
+    .select(
+      "class:classes(name, grade_level:grade_levels(name)), academic_year:academic_years(is_current)",
+    )
+    .eq("student_id", payment.student.id)
+    .eq("status", "active")
+    .order("enrolled_on", { ascending: false })
+    .limit(8);
+
+  const enrolmentRows =
+    (enrolment as {
+      class: {
+        name: string;
+        grade_level: { name: string } | null;
+      } | null;
+      academic_year: { is_current: boolean } | null;
+    }[] | null) ?? [];
+  const currentEnrolment =
+    enrolmentRows.find((row) => row.academic_year?.is_current) ??
+    enrolmentRows[0] ??
+    null;
 
   return {
     id: payment.id,
@@ -993,14 +1254,24 @@ export async function getPaymentReceipt(
         .filter(Boolean)
         .join(" "),
       admissionNumber: payment.student.admission_number,
+      gradeName: currentEnrolment?.class?.grade_level?.name ?? null,
+      className: currentEnrolment?.class?.name ?? null,
     },
+    payer,
     school: {
       name: payment.school.name,
+      motto: payment.school.motto,
       address: payment.school.address,
       phone: payment.school.phone,
+      email: payment.school.email,
+      logoUrl: payment.school.logo_url,
     },
-    balanceAfter: statement.balance,
-    availableCreditAfter: statement.availableCredit,
-    allocations: statementPayment?.allocations.filter((a) => !a.reversedAt) ?? [],
+    snapshot,
+    balanceBefore: snapshot?.balanceBefore ?? null,
+    balanceAfter: snapshot?.balanceAfter ?? null,
+    availableCreditBefore: snapshot?.availableCreditBefore ?? null,
+    availableCreditAfter: snapshot?.availableCreditAfter ?? null,
+    outstandingAfter: snapshot?.outstandingAfter ?? null,
+    allocations: activeAllocations,
   };
 }

@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     // OpenNext / Wrangler build output
     ".open-next/**",
     ".wrangler/**",
+    // Node CJS operational scripts (require-based)
+    "scripts/**",
   ]),
 ]);
 

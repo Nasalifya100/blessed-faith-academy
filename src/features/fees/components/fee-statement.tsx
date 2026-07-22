@@ -67,7 +67,18 @@ type TimelineEvent = {
   title: string;
   detail: string;
   amount: number | null;
-  kind: "charge" | "payment" | "reversal" | "waived";
+  kind: "charge" | "payment" | "reversal" | "waived" | "audit";
+};
+
+const AUDIT_EVENT_TITLES: Record<string, string> = {
+  payment_recorded: "Payment recorded (audit)",
+  allocation_created: "Allocation created",
+  advance_credit_created: "Advance credit created",
+  credit_applied: "Credit applied",
+  payment_voided: "Payment voided (audit)",
+  allocations_reversed: "Allocations reversed",
+  historical_backfill: "Historical backfill",
+  optional_charge_cancelled: "Optional charge cancelled",
 };
 
 function categoryLabel(category: string): string {
@@ -175,12 +186,17 @@ function buildTimeline(statement: StudentFeeStatement): TimelineEvent[] {
   }
 
   for (const payment of statement.payments) {
+    const snap = payment.snapshot;
     events.push({
       id: `payment-${payment.id}`,
       at: payment.paidOn,
       title: "Payment recorded",
       detail: `${payment.receiptNumber} · ${
         METHOD_LABELS[payment.method] ?? payment.method
+      }${
+        snap
+          ? ` · Balance ${formatKwacha(snap.balanceBefore)} → ${formatKwacha(snap.balanceAfter)}`
+          : ""
       }`,
       amount: payment.amount,
       kind: "payment",
@@ -197,6 +213,52 @@ function buildTimeline(statement: StudentFeeStatement): TimelineEvent[] {
       }`,
       amount: payment.amount,
       kind: "reversal",
+    });
+  }
+
+  for (const audit of statement.financeAuditEvents) {
+    // Payment/void rows already appear from ledger; keep cancel + credit audits visible.
+    if (
+      audit.eventType === "payment_recorded" ||
+      audit.eventType === "payment_voided" ||
+      audit.eventType === "allocation_created" ||
+      audit.eventType === "allocations_reversed" ||
+      audit.eventType === "historical_backfill"
+    ) {
+      continue;
+    }
+
+    const previousStatus =
+      typeof audit.metadata.previous_status === "string"
+        ? audit.metadata.previous_status
+        : null;
+    const newStatus =
+      typeof audit.metadata.new_status === "string"
+        ? audit.metadata.new_status
+        : null;
+    const eventCode =
+      typeof audit.metadata.event_code === "string"
+        ? audit.metadata.event_code
+        : null;
+
+    const parts = [
+      eventCode,
+      previousStatus && newStatus
+        ? `${previousStatus} → ${newStatus}`
+        : null,
+      audit.reason,
+      audit.actorName ? `by ${audit.actorName}` : null,
+    ].filter(Boolean);
+
+    events.push({
+      id: `audit-${audit.id}`,
+      at: audit.createdAt,
+      title:
+        AUDIT_EVENT_TITLES[audit.eventType] ??
+        audit.eventType.replaceAll("_", " "),
+      detail: parts.join(" · ") || audit.eventType,
+      amount: audit.amount,
+      kind: "audit",
     });
   }
 
@@ -235,6 +297,7 @@ export function FeeStatement({
       const result = await cancelOptionalChargeAction({
         chargeId,
         studentId,
+        reason: "Optional charge cancelled from student finance statement",
       });
       setPendingId(null);
       if (result.error) {
@@ -583,6 +646,46 @@ export function FeeStatement({
                                 {formatKwacha(payment.unallocatedCredit)}
                               </dd>
                             </div>
+                            {payment.snapshot ? (
+                              <>
+                                <div>
+                                  <dt className="text-xs text-muted-foreground">
+                                    Balance before
+                                  </dt>
+                                  <dd className="tabular-nums">
+                                    {formatKwacha(payment.snapshot.balanceBefore)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs text-muted-foreground">
+                                    Balance after
+                                  </dt>
+                                  <dd className="tabular-nums">
+                                    {formatKwacha(payment.snapshot.balanceAfter)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs text-muted-foreground">
+                                    Credit after
+                                  </dt>
+                                  <dd className="tabular-nums">
+                                    {formatKwacha(
+                                      payment.snapshot.availableCreditAfter,
+                                    )}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs text-muted-foreground">
+                                    Outstanding after
+                                  </dt>
+                                  <dd className="tabular-nums">
+                                    {formatKwacha(
+                                      payment.snapshot.outstandingAfter,
+                                    )}
+                                  </dd>
+                                </div>
+                              </>
+                            ) : null}
                             <div>
                               <dt className="text-xs text-muted-foreground">
                                 Receipt number
@@ -766,7 +869,9 @@ export function FeeStatement({
                       ? CheckCircle2
                       : event.kind === "waived"
                         ? XCircle
-                        : PlusCircle;
+                        : event.kind === "audit"
+                          ? History
+                          : PlusCircle;
                 const iconClass =
                   event.kind === "reversal"
                     ? "text-muted-foreground"
@@ -774,7 +879,9 @@ export function FeeStatement({
                       ? "text-emerald-600"
                       : event.kind === "waived"
                         ? "text-muted-foreground"
-                        : "text-sky-700 dark:text-sky-300";
+                        : event.kind === "audit"
+                          ? "text-amber-700 dark:text-amber-300"
+                          : "text-sky-700 dark:text-sky-300";
                 return (
                   <li
                     key={event.id}
@@ -804,6 +911,8 @@ export function FeeStatement({
                               "text-muted-foreground line-through",
                             event.kind === "payment" &&
                               "text-emerald-700 dark:text-emerald-300",
+                            event.kind === "audit" &&
+                              "text-amber-800 dark:text-amber-200",
                           )}
                         >
                           {formatKwacha(event.amount)}

@@ -463,6 +463,7 @@ export async function cancelOptionalChargeAction(
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.rpc("cancel_optional_charge", {
     p_charge_id: parsed.data.chargeId,
+    p_reason: parsed.data.reason ?? null,
   });
 
   if (error) {

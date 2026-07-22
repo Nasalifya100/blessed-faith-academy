@@ -133,6 +133,7 @@ export type SetRequirementReceivedInput = z.infer<
 export const cancelOptionalChargeSchema = z.object({
   chargeId: z.string().uuid(),
   studentId: z.string().uuid(),
+  reason: z.string().trim().max(500).optional(),
 });
 
 export type CancelOptionalChargeInput = z.infer<
