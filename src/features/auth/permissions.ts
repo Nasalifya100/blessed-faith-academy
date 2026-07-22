@@ -103,6 +103,13 @@ export function canRunProductionReset(
   return normalizeStaffRole(role) === "administrator";
 }
 
+/** Finance allocation migration status is Administrator-only (read-only). */
+export function canViewFinanceMigrationStatus(
+  role: StaffRole | null | undefined,
+): boolean {
+  return normalizeStaffRole(role) === "administrator";
+}
+
 /** Server-only env gate (never NEXT_PUBLIC). */
 export function isProductionResetEnvEnabled(): boolean {
   return process.env.ALLOW_PRODUCTION_RESET === "true";

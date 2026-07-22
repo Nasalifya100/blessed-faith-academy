@@ -107,7 +107,8 @@ function canCancelOptionalCharge(
     canManageFees &&
     charge.chargeSource !== "LEGACY_OPENING_BALANCE" &&
     charge.isOptional &&
-    charge.status === "outstanding" &&
+    charge.remainingAmount > 0 &&
+    charge.allocatedAmount <= 0 &&
     (charge.category === "meal" || charge.category === "uniform")
   );
 }
@@ -344,9 +345,24 @@ export function FeeStatement({
                         </div>
                         <ChargeStatusBadge status={charge.status} />
                       </div>
-                      <p className="text-right text-lg font-semibold tabular-nums">
-                        {formatKwacha(charge.amount)}
-                      </p>
+                      <div className="text-right">
+                        <p className="text-lg font-semibold tabular-nums">
+                          {formatKwacha(charge.amount)}
+                        </p>
+                        {charge.allocatedAmount > 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            Remaining {formatKwacha(charge.remainingAmount)}
+                          </p>
+                        ) : null}
+                        {charge.isBroughtForward ? (
+                          <p className="text-xs text-muted-foreground">
+                            Brought forward
+                            {charge.academicYearName
+                              ? ` · ${charge.academicYearName}`
+                              : ""}
+                          </p>
+                        ) : null}
+                      </div>
                       {canManageFees ? (
                         <div className="border-t pt-3">
                           {canCancel ? (
@@ -387,6 +403,7 @@ export function FeeStatement({
                         <TableHead>Term</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">Remaining</TableHead>
                         {canManageFees ? (
                           <TableHead className="w-44 text-right">
                             Actions
@@ -436,6 +453,19 @@ export function FeeStatement({
                             </TableCell>
                             <TableCell className="text-right font-semibold tabular-nums">
                               {formatKwacha(charge.amount)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              <div>
+                                {formatKwacha(charge.remainingAmount)}
+                                {charge.isBroughtForward ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    BF
+                                    {charge.academicYearName
+                                      ? ` · ${charge.academicYearName}`
+                                      : ""}
+                                  </p>
+                                ) : null}
+                              </div>
                             </TableCell>
                             {canManageFees ? (
                               <TableCell className="text-right">
@@ -539,6 +569,22 @@ export function FeeStatement({
                             </div>
                             <div>
                               <dt className="text-xs text-muted-foreground">
+                                Amount allocated
+                              </dt>
+                              <dd className="tabular-nums">
+                                {formatKwacha(payment.amountAllocated)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-muted-foreground">
+                                Unallocated credit
+                              </dt>
+                              <dd className="tabular-nums">
+                                {formatKwacha(payment.unallocatedCredit)}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="text-xs text-muted-foreground">
                                 Receipt number
                               </dt>
                               <dd className="font-mono text-xs">
@@ -562,6 +608,38 @@ export function FeeStatement({
                               </div>
                             ) : null}
                           </dl>
+                          {payment.allocations.length > 0 ? (
+                            <div className="space-y-1 border-t pt-3">
+                              <p className="text-xs font-medium text-muted-foreground uppercase">
+                                Allocation details
+                              </p>
+                              <ul className="space-y-1 text-xs">
+                                {payment.allocations.map((allocation) => (
+                                  <li
+                                    key={allocation.id}
+                                    className={cn(
+                                      "flex flex-wrap justify-between gap-2",
+                                      allocation.reversedAt &&
+                                        "text-muted-foreground line-through",
+                                    )}
+                                  >
+                                    <span>
+                                      {allocation.feeItemName}
+                                      {allocation.academicYearName
+                                        ? ` · ${allocation.academicYearName}`
+                                        : ""}
+                                      {allocation.termName
+                                        ? ` · ${allocation.termName}`
+                                        : ""}
+                                    </span>
+                                    <span className="tabular-nums">
+                                      {formatKwacha(allocation.amount)}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
                           <Link

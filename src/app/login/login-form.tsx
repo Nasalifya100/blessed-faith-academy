@@ -68,6 +68,10 @@ export function LoginForm() {
         {errors.password ? (
           <p className="text-sm text-destructive">{errors.password.message}</p>
         ) : null}
+        <p className="text-xs text-muted-foreground">
+          Forgot your password? Ask an Administrator to send you a reset link
+          from Staff.
+        </p>
       </div>
 
       {serverError ? (

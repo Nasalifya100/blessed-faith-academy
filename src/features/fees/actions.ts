@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import {
+  applyAvailableCreditSchema,
   cancelOptionalChargeSchema,
   generateClassChargesSchema,
   generateStudentChargesSchema,
@@ -14,6 +15,8 @@ import {
   updateScheduleAmountSchema,
   voidPaymentSchema,
 } from "./schemas";
+import { previewPaymentApplication } from "./payment-preview";
+import { fromNgwee, toNgwee } from "@/lib/money";
 
 
 export interface ActionResult {
@@ -178,6 +181,39 @@ export async function generateClassChargesAction(
 export interface RecordPaymentResult {
   error: string | null;
   paymentId: string | null;
+  amountAllocated?: number | null;
+  creditCreated?: number | null;
+}
+
+function parseRecordPaymentRpc(data: unknown): {
+  paymentId: string | null;
+  amountAllocated: number | null;
+  creditCreated: number | null;
+} {
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const row = data as Record<string, unknown>;
+    const paymentId =
+      typeof row.payment_id === "string" ? row.payment_id : null;
+    return {
+      paymentId,
+      amountAllocated:
+        row.amount_allocated != null
+          ? fromNgwee(toNgwee(row.amount_allocated as number | string))
+          : null,
+      creditCreated:
+        row.credit_created != null
+          ? fromNgwee(toNgwee(row.credit_created as number | string))
+          : null,
+    };
+  }
+  if (typeof data === "string") {
+    return {
+      paymentId: data,
+      amountAllocated: null,
+      creditCreated: null,
+    };
+  }
+  return { paymentId: null, amountAllocated: null, creditCreated: null };
 }
 
 export async function recordPaymentAction(
@@ -198,7 +234,28 @@ export async function recordPaymentAction(
 
   const data = parsed.data;
   const supabase = await createSupabaseServerClient();
-  const { data: paymentId, error } = await supabase.rpc("record_payment", {
+
+  const { data: summaryRaw } = await supabase.rpc("get_student_finance_summary", {
+    p_student_id: data.studentId,
+  });
+  const summary = (summaryRaw ?? {}) as Record<string, unknown>;
+  const outstanding = fromNgwee(
+    toNgwee((summary.outstanding_balance as number | string | undefined) ?? 0),
+  );
+  const preview = previewPaymentApplication({
+    amountReceived: data.amount,
+    outstandingBalance: outstanding,
+  });
+
+  if (preview.createsCredit && data.confirmCredit !== true) {
+    return {
+      error:
+        "Confirm that the unapplied amount will remain on the pupil’s account as available credit.",
+      paymentId: null,
+    };
+  }
+
+  const { data: rpcData, error } = await supabase.rpc("record_payment", {
     p_student_id: data.studentId,
     p_amount: data.amount,
     p_method: data.method,
@@ -212,14 +269,61 @@ export async function recordPaymentAction(
     return { error: error.message, paymentId: null };
   }
 
-  const id = typeof paymentId === "string" ? paymentId : null;
+  const parsedRpc = parseRecordPaymentRpc(rpcData);
   revalidatePath(`/dashboard/students/${data.studentId}`);
   revalidatePath("/dashboard/reports");
   revalidatePath("/dashboard/reports/fee-balances");
-  if (id) {
-    revalidatePath(`/dashboard/payments/${id}/receipt`);
+  if (parsedRpc.paymentId) {
+    revalidatePath(`/dashboard/payments/${parsedRpc.paymentId}/receipt`);
   }
-  return { error: null, paymentId: id };
+  return {
+    error: null,
+    paymentId: parsedRpc.paymentId,
+    amountAllocated: parsedRpc.amountAllocated,
+    creditCreated: parsedRpc.creditCreated,
+  };
+}
+
+export interface ApplyCreditResult {
+  error: string | null;
+  creditApplied: number | null;
+}
+
+export async function applyAvailableCreditAction(
+  input: unknown,
+): Promise<ApplyCreditResult> {
+  const auth = await assertFeeManager();
+  if (!auth.ok) {
+    return { error: auth.error, creditApplied: null };
+  }
+
+  const parsed = applyAvailableCreditSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Please confirm the action.",
+      creditApplied: null,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("apply_available_credit", {
+    p_student_id: parsed.data.studentId,
+  });
+
+  if (error) {
+    return { error: error.message, creditApplied: null };
+  }
+
+  const row = (data ?? {}) as Record<string, unknown>;
+  const creditApplied =
+    row.credit_applied != null
+      ? fromNgwee(toNgwee(row.credit_applied as number | string))
+      : null;
+
+  revalidatePath(`/dashboard/students/${parsed.data.studentId}`);
+  revalidatePath("/dashboard/reports");
+  revalidatePath("/dashboard/reports/fee-balances");
+  return { error: null, creditApplied };
 }
 
 export async function voidPaymentAction(

@@ -132,7 +132,7 @@ export default async function PaymentReceiptPage({
           </div>
           <div>
             <dt className="text-xs text-muted-foreground print:text-neutral-600">
-              Amount
+              Amount received
             </dt>
             <dd
               className={cn(
@@ -141,6 +141,22 @@ export default async function PaymentReceiptPage({
               )}
             >
               {formatKwacha(receipt.amount)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground print:text-neutral-600">
+              Applied to outstanding charges
+            </dt>
+            <dd className="font-semibold tabular-nums">
+              {formatKwacha(receipt.amountAllocated)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground print:text-neutral-600">
+              Advance credit created
+            </dt>
+            <dd className="font-semibold tabular-nums">
+              {formatKwacha(receipt.creditCreated)}
             </dd>
           </div>
           <div>
@@ -206,7 +222,7 @@ export default async function PaymentReceiptPage({
         <div className="space-y-3 border-t pt-4 print:border-black">
           <div className="flex items-center justify-between text-lg">
             <span className="font-medium">
-              {isVoided ? "Original amount" : "Amount paid"}
+              {isVoided ? "Original amount received" : "Amount received"}
             </span>
             <span
               className={cn(
@@ -217,12 +233,36 @@ export default async function PaymentReceiptPage({
               {formatKwacha(receipt.amount)}
             </span>
           </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground print:text-neutral-600">
+              Applied to charges
+            </span>
+            <span className="font-semibold tabular-nums">
+              {formatKwacha(receipt.amountAllocated)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground print:text-neutral-600">
+              Advance credit created
+            </span>
+            <span className="font-semibold tabular-nums">
+              {formatKwacha(receipt.creditCreated)}
+            </span>
+          </div>
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground print:text-neutral-600">
-              {isVoided ? "Current student balance" : "Remaining balance"}
+              {isVoided ? "Current outstanding balance" : "Remaining outstanding"}
             </span>
             <span className="font-semibold tabular-nums">
               {formatKwacha(receipt.balanceAfter)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground print:text-neutral-600">
+              Available credit
+            </span>
+            <span className="font-semibold tabular-nums">
+              {formatKwacha(receipt.availableCreditAfter)}
             </span>
           </div>
         </div>

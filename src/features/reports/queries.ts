@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentYearClasses } from "@/features/students/queries";
-import { fromNgwee, subKwacha, toNgwee } from "@/lib/money";
+import { fromNgwee, toNgwee } from "@/lib/money";
 
 function fullName(parts: {
   first_name: string;
@@ -21,9 +21,16 @@ export interface FeeBalanceRow {
   admissionNumber: string;
   fullName: string;
   className: string | null;
+  /** Lifetime active charges. */
   totalCharged: number;
+  /** Gross completed payments received (not allocations). */
   totalPaid: number;
+  totalAllocated: number;
+  availableCredit: number;
+  /** Authoritative outstanding (charge remainders). */
   balance: number;
+  broughtForwardOutstanding: number;
+  currentYearOutstanding: number;
 }
 
 export interface FeeBalancesReport {
@@ -32,8 +39,11 @@ export interface FeeBalancesReport {
   totals: {
     charged: number;
     paid: number;
+    allocated: number;
+    availableCredit: number;
     balance: number;
     studentsWithBalance: number;
+    studentsWithCredit: number;
   };
 }
 
@@ -49,11 +59,21 @@ export async function getFeeBalancesReport(options?: {
     .eq("is_current", true)
     .maybeSingle();
 
+  const emptyTotals = {
+    charged: 0,
+    paid: 0,
+    allocated: 0,
+    availableCredit: 0,
+    balance: 0,
+    studentsWithBalance: 0,
+    studentsWithCredit: 0,
+  };
+
   if (!year?.id) {
     return {
       academicYearName: null,
       rows: [],
-      totals: { charged: 0, paid: 0, balance: 0, studentsWithBalance: 0 },
+      totals: emptyTotals,
     };
   }
 
@@ -76,7 +96,7 @@ export async function getFeeBalancesReport(options?: {
     return {
       academicYearName: year.name,
       rows: [],
-      totals: { charged: 0, paid: 0, balance: 0, studentsWithBalance: 0 },
+      totals: emptyTotals,
     };
   }
 
@@ -106,24 +126,91 @@ export async function getFeeBalancesReport(options?: {
     );
   }
 
+  // Lifetime active charges
   const { data: chargeRows } = await supabase
     .from("charges")
-    .select("student_id, amount, status")
-    .eq("academic_year_id", year.id)
+    .select("id, student_id, amount, status, academic_year_id")
     .neq("status", "cancelled")
     .in("student_id", studentIds);
 
   const chargedByStudent = new Map<string, number>();
+  const chargeIds: string[] = [];
+  const chargeMeta = new Map<
+    string,
+    { studentId: string; amountNgwee: number; yearId: string; waived: boolean }
+  >();
+
   for (const row of (chargeRows as {
+    id: string;
     student_id: string;
     amount: number | string;
     status: string;
+    academic_year_id: string;
   }[] | null) ?? []) {
-    if (row.status === "waived") continue;
+    const waived = row.status === "waived";
+    chargeMeta.set(row.id, {
+      studentId: row.student_id,
+      amountNgwee: toNgwee(row.amount),
+      yearId: row.academic_year_id,
+      waived,
+    });
+    chargeIds.push(row.id);
+    if (waived) continue;
     chargedByStudent.set(
       row.student_id,
       (chargedByStudent.get(row.student_id) ?? 0) + toNgwee(row.amount),
     );
+  }
+
+  const allocatedByCharge = new Map<string, number>();
+  if (chargeIds.length > 0) {
+    const { data: allocRows } = await supabase
+      .from("payment_allocations")
+      .select("charge_id, amount, payment:payments!inner(status)")
+      .in("charge_id", chargeIds)
+      .is("reversed_at", null);
+
+    for (const row of (allocRows as {
+      charge_id: string;
+      amount: number | string;
+      payment: { status: string } | null;
+    }[] | null) ?? []) {
+      if (row.payment?.status !== "completed") continue;
+      allocatedByCharge.set(
+        row.charge_id,
+        (allocatedByCharge.get(row.charge_id) ?? 0) + toNgwee(row.amount),
+      );
+    }
+  }
+
+  const outstandingByStudent = new Map<string, number>();
+  const bfByStudent = new Map<string, number>();
+  const cyOutstandingByStudent = new Map<string, number>();
+  const allocatedByStudent = new Map<string, number>();
+
+  for (const [chargeId, meta] of chargeMeta) {
+    if (meta.waived) continue;
+    const allocated = allocatedByCharge.get(chargeId) ?? 0;
+    allocatedByStudent.set(
+      meta.studentId,
+      (allocatedByStudent.get(meta.studentId) ?? 0) + allocated,
+    );
+    const remaining = Math.max(0, meta.amountNgwee - allocated);
+    outstandingByStudent.set(
+      meta.studentId,
+      (outstandingByStudent.get(meta.studentId) ?? 0) + remaining,
+    );
+    if (meta.yearId === year.id) {
+      cyOutstandingByStudent.set(
+        meta.studentId,
+        (cyOutstandingByStudent.get(meta.studentId) ?? 0) + remaining,
+      );
+    } else {
+      bfByStudent.set(
+        meta.studentId,
+        (bfByStudent.get(meta.studentId) ?? 0) + remaining,
+      );
+    }
   }
 
   const { data: paymentRows } = await supabase
@@ -146,6 +233,15 @@ export async function getFeeBalancesReport(options?: {
   let rows: FeeBalanceRow[] = students.map((student) => {
     const totalCharged = fromNgwee(chargedByStudent.get(student.id) ?? 0);
     const totalPaid = fromNgwee(paidByStudent.get(student.id) ?? 0);
+    const totalAllocated = fromNgwee(allocatedByStudent.get(student.id) ?? 0);
+    const availableCredit = fromNgwee(
+      Math.max(
+        0,
+        (paidByStudent.get(student.id) ?? 0) -
+          (allocatedByStudent.get(student.id) ?? 0),
+      ),
+    );
+    const balance = fromNgwee(outstandingByStudent.get(student.id) ?? 0);
     return {
       studentId: student.id,
       admissionNumber: student.admission_number,
@@ -153,12 +249,20 @@ export async function getFeeBalancesReport(options?: {
       className: classByStudent.get(student.id) ?? null,
       totalCharged,
       totalPaid,
-      balance: subKwacha(totalCharged, totalPaid),
+      totalAllocated,
+      availableCredit,
+      balance,
+      broughtForwardOutstanding: fromNgwee(bfByStudent.get(student.id) ?? 0),
+      currentYearOutstanding: fromNgwee(
+        cyOutstandingByStudent.get(student.id) ?? 0,
+      ),
     };
   });
 
   if (outstandingOnly) {
-    rows = rows.filter((row) => toNgwee(row.balance) > 0);
+    rows = rows.filter(
+      (row) => toNgwee(row.balance) > 0 || toNgwee(row.availableCredit) > 0,
+    );
   }
 
   rows.sort((a, b) => toNgwee(b.balance) - toNgwee(a.balance));
@@ -168,10 +272,18 @@ export async function getFeeBalancesReport(options?: {
       rows.reduce((sum, row) => sum + toNgwee(row.totalCharged), 0),
     ),
     paid: fromNgwee(rows.reduce((sum, row) => sum + toNgwee(row.totalPaid), 0)),
+    allocated: fromNgwee(
+      rows.reduce((sum, row) => sum + toNgwee(row.totalAllocated), 0),
+    ),
+    availableCredit: fromNgwee(
+      rows.reduce((sum, row) => sum + toNgwee(row.availableCredit), 0),
+    ),
     balance: fromNgwee(
       rows.reduce((sum, row) => sum + toNgwee(row.balance), 0),
     ),
     studentsWithBalance: rows.filter((row) => toNgwee(row.balance) > 0).length,
+    studentsWithCredit: rows.filter((row) => toNgwee(row.availableCredit) > 0)
+      .length,
   };
 
   return {

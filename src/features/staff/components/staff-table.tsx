@@ -15,6 +15,7 @@ import {
   updateStaffRoleAction,
   setStaffActiveAction,
 } from "@/features/staff/actions";
+import { adminSendPasswordResetAction } from "@/features/auth/password-reset-actions";
 import { STAFF_ROLES } from "@/features/staff/schemas";
 import { ROLE_LABELS, type StaffRole } from "@/features/auth/types";
 import type { StaffMember } from "@/features/staff/queries";
@@ -70,6 +71,12 @@ export function StaffTable({ staff, currentUserId }: StaffTableProps) {
     nextActive: boolean;
     name: string;
   } | null>(null);
+  const [resetConfirm, setResetConfirm] = useState<{
+    id: string;
+    name: string;
+    email: string | null;
+  } | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     const active = staff.filter((m) => m.is_active).length;
@@ -142,6 +149,37 @@ export function StaffTable({ staff, currentUserId }: StaffTableProps) {
         return;
       }
       router.refresh();
+    });
+  }
+
+  function requestPasswordReset(member: StaffMember) {
+    setResetMessage(null);
+    setError(null);
+    setResetConfirm({
+      id: member.id,
+      name: member.full_name,
+      email: member.email,
+    });
+  }
+
+  function confirmPasswordReset() {
+    if (!resetConfirm?.email) {
+      setError("This staff account has no email address on file.");
+      setResetConfirm(null);
+      return;
+    }
+    setError(null);
+    setResetMessage(null);
+    startTransition(async () => {
+      const result = await adminSendPasswordResetAction({
+        staffId: resetConfirm.id,
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setResetMessage(`Password reset link sent to ${resetConfirm.email}.`);
+      setResetConfirm(null);
     });
   }
 
@@ -263,6 +301,11 @@ export function StaffTable({ staff, currentUserId }: StaffTableProps) {
           {error ? (
             <p className="text-sm text-destructive" role="alert">
               {error}
+            </p>
+          ) : null}
+          {resetMessage ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              {resetMessage}
             </p>
           ) : null}
 
@@ -417,6 +460,7 @@ export function StaffTable({ staff, currentUserId }: StaffTableProps) {
           onClose={() => setSelectedId(null)}
           onRoleChange={handleRoleChange}
           onRequestToggle={() => requestToggleActive(selected)}
+          onRequestPasswordReset={() => requestPasswordReset(selected)}
         />
       ) : null}
 
@@ -438,6 +482,21 @@ export function StaffTable({ staff, currentUserId }: StaffTableProps) {
         onCancel={() => setConfirm(null)}
         onConfirm={confirmToggleActive}
       />
+
+      <ConfirmDialog
+        open={Boolean(resetConfirm)}
+        title={`Send password reset to ${resetConfirm?.name ?? "staff member"}?`}
+        description={
+          resetConfirm?.email
+            ? `A secure reset link will be emailed to ${resetConfirm.email}. No temporary password is created or shown.`
+            : "This account has no email on file. A reset link cannot be sent."
+        }
+        confirmLabel="Send reset link"
+        tone="default"
+        pending={isPending}
+        onCancel={() => setResetConfirm(null)}
+        onConfirm={confirmPasswordReset}
+      />
     </div>
   );
 }
@@ -449,6 +508,7 @@ function StaffProfilePanel({
   onClose,
   onRoleChange,
   onRequestToggle,
+  onRequestPasswordReset,
 }: {
   member: StaffMember;
   isSelf: boolean;
@@ -456,6 +516,7 @@ function StaffProfilePanel({
   onClose: () => void;
   onRoleChange: (id: string, role: StaffRole) => void;
   onRequestToggle: () => void;
+  onRequestPasswordReset: () => void;
 }) {
   const permissions = permissionsSummaryForRole(member.role);
 
@@ -572,7 +633,7 @@ function StaffProfilePanel({
                 </p>
               ) : null}
             </div>
-            <div className="flex items-end">
+            <div className="flex flex-col gap-2 sm:items-end">
               <Button
                 type="button"
                 variant="outline"
@@ -582,6 +643,19 @@ function StaffProfilePanel({
               >
                 {member.is_active ? "Deactivate account" : "Activate account"}
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11 w-full sm:w-auto"
+                disabled={isPending || !member.is_active || !member.email}
+                onClick={onRequestPasswordReset}
+              >
+                Reset password
+              </Button>
+              <p className="text-xs text-muted-foreground sm:text-right">
+                Sends a secure email reset link. No temporary password is
+                displayed.
+              </p>
             </div>
           </div>
         </section>

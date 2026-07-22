@@ -198,8 +198,13 @@ export async function listStudents(
 // ---------------------------------------------------------------------------
 
 export interface StudentGuardianView {
+  /** student_guardians link id */
   id: string;
+  /** guardians.id — shared parent record */
+  guardianId: string;
   fullName: string;
+  firstName: string;
+  lastName: string;
   relationship: string;
   phone: string | null;
   altPhone: string | null;
@@ -211,6 +216,7 @@ export interface StudentGuardianView {
   postalAddress: string | null;
   isPrimary: boolean;
   isEmergency: boolean;
+  linkedStudentCount: number;
 }
 
 export interface StudentEnrolmentView {
@@ -261,6 +267,7 @@ interface GuardianJoinRow {
   is_primary_contact: boolean;
   is_emergency_contact: boolean;
   guardian: {
+    id: string;
     first_name: string;
     last_name: string;
     phone: string | null;
@@ -309,7 +316,7 @@ export async function getStudentProfile(
   const { data: guardianRows } = await supabase
     .from("student_guardians")
     .select(
-      "id, relationship, is_primary_contact, is_emergency_contact, guardian:guardians(first_name, last_name, phone, alt_phone, whatsapp, email, national_id, occupation, address, postal_address)",
+      "id, relationship, is_primary_contact, is_emergency_contact, guardian:guardians(id, first_name, last_name, phone, alt_phone, whatsapp, email, national_id, occupation, address, postal_address)",
     )
     .eq("student_id", id);
 
@@ -321,25 +328,50 @@ export async function getStudentProfile(
     .eq("student_id", id)
     .order("enrolled_on", { ascending: false });
 
+  const guardianIds = ((guardianRows as GuardianJoinRow[] | null) ?? [])
+    .map((row) => row.guardian?.id)
+    .filter((value): value is string => Boolean(value));
+
+  const linkedCountByGuardian = new Map<string, number>();
+  if (guardianIds.length > 0) {
+    const { data: linkCounts } = await supabase
+      .from("student_guardians")
+      .select("guardian_id")
+      .in("guardian_id", guardianIds);
+
+    for (const row of (linkCounts as { guardian_id: string }[] | null) ?? []) {
+      linkedCountByGuardian.set(
+        row.guardian_id,
+        (linkedCountByGuardian.get(row.guardian_id) ?? 0) + 1,
+      );
+    }
+  }
+
   const guardians: StudentGuardianView[] = (
     (guardianRows as GuardianJoinRow[] | null) ?? []
-  ).map((row) => ({
-    id: row.id,
-    fullName: [row.guardian?.first_name, row.guardian?.last_name]
-      .filter(Boolean)
-      .join(" "),
-    relationship: row.relationship,
-    phone: row.guardian?.phone ?? null,
-    altPhone: row.guardian?.alt_phone ?? null,
-    whatsapp: row.guardian?.whatsapp ?? null,
-    email: row.guardian?.email ?? null,
-    nationalId: row.guardian?.national_id ?? null,
-    occupation: row.guardian?.occupation ?? null,
-    address: row.guardian?.address ?? null,
-    postalAddress: row.guardian?.postal_address ?? null,
-    isPrimary: row.is_primary_contact,
-    isEmergency: row.is_emergency_contact,
-  }));
+  )
+    .filter((row) => Boolean(row.guardian?.id))
+    .map((row) => ({
+      id: row.id,
+      guardianId: row.guardian!.id,
+      fullName: [row.guardian?.first_name, row.guardian?.last_name]
+        .filter(Boolean)
+        .join(" "),
+      firstName: row.guardian!.first_name,
+      lastName: row.guardian!.last_name,
+      relationship: row.relationship,
+      phone: row.guardian?.phone ?? null,
+      altPhone: row.guardian?.alt_phone ?? null,
+      whatsapp: row.guardian?.whatsapp ?? null,
+      email: row.guardian?.email ?? null,
+      nationalId: row.guardian?.national_id ?? null,
+      occupation: row.guardian?.occupation ?? null,
+      address: row.guardian?.address ?? null,
+      postalAddress: row.guardian?.postal_address ?? null,
+      isPrimary: row.is_primary_contact,
+      isEmergency: row.is_emergency_contact,
+      linkedStudentCount: linkedCountByGuardian.get(row.guardian!.id) ?? 1,
+    }));
 
   guardians.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
 

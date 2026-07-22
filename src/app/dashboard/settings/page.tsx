@@ -191,34 +191,56 @@ export default async function SettingsPage() {
             controls stay disabled until explicitly unlocked on the server.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Production Reset</p>
-            <p className="max-w-xl text-sm text-muted-foreground">
-              Permanently remove test operational data while preserving staff,
-              authentication, academic setup, and fee configuration.
-            </p>
-            {!resetEnabled ? (
-              <p className="text-xs text-muted-foreground">
-                Reset unavailable —{" "}
-                <code className="rounded bg-muted px-1 py-0.5">
-                  ALLOW_PRODUCTION_RESET
-                </code>{" "}
-                is not enabled.
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Finance migration readiness</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Administrator-only checklist for Phase 2 payment allocations.
+                Read-only — does not activate, backfill, or change payments.
               </p>
-            ) : (
-              <StatusBadge tone="warning">Reset unlocked</StatusBadge>
-            )}
+            </div>
+            <Link
+              href="/dashboard/settings/finance-migration"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "min-h-11 shrink-0",
+              )}
+            >
+              Open finance migration status
+            </Link>
           </div>
-          <Link
-            href="/dashboard/settings/production-reset"
-            className={cn(
-              buttonVariants({ variant: resetEnabled ? "destructive" : "outline" }),
-              "min-h-11 shrink-0",
-            )}
-          >
-            Open Production Reset
-          </Link>
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Production Reset</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Permanently remove test operational data while preserving staff,
+                authentication, academic setup, and fee configuration.
+              </p>
+              {!resetEnabled ? (
+                <p className="text-xs text-muted-foreground">
+                  Reset unavailable —{" "}
+                  <code className="rounded bg-muted px-1 py-0.5">
+                    ALLOW_PRODUCTION_RESET
+                  </code>{" "}
+                  is not enabled.
+                </p>
+              ) : (
+                <StatusBadge tone="warning">Reset unlocked</StatusBadge>
+              )}
+            </div>
+            <Link
+              href="/dashboard/settings/production-reset"
+              className={cn(
+                buttonVariants({
+                  variant: resetEnabled ? "destructive" : "outline",
+                }),
+                "min-h-11 shrink-0",
+              )}
+            >
+              Open Production Reset
+            </Link>
+          </div>
         </CardContent>
       </Card>
 

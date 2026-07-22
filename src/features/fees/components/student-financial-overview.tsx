@@ -46,10 +46,11 @@ function derivePaymentStatus(
   balance: number,
   totalPaid: number,
   totalCharged: number,
+  availableCredit: number,
 ): PaymentStatusKind {
-  if (totalCharged <= 0) return "cancelled";
+  if (totalCharged <= 0 && availableCredit <= 0) return "cancelled";
   if (balance <= 0) return "paid_in_full";
-  if (totalPaid > 0) return "partially_paid";
+  if (totalPaid > 0 || availableCredit > 0) return "partially_paid";
   return "outstanding";
 }
 
@@ -82,6 +83,7 @@ export function StudentFinancialOverview({
     statement.balance,
     statement.totalPaid,
     statement.totalCharged,
+    statement.availableCredit,
   );
   const statusMeta = PAYMENT_STATUS_META[paymentStatus];
 
@@ -89,7 +91,10 @@ export function StudentFinancialOverview({
     statement.totalCharged > 0
       ? Math.min(
           100,
-          Math.max(0, (statement.totalPaid / statement.totalCharged) * 100),
+          Math.max(
+            0,
+            (statement.totalAllocated / statement.totalCharged) * 100,
+          ),
         )
       : 0;
 
@@ -98,7 +103,7 @@ export function StudentFinancialOverview({
   )[0];
 
   const outstandingChargesCount = statement.charges.filter(
-    (charge) => charge.status === "outstanding",
+    (charge) => charge.remainingAmount > 0 && charge.status !== "waived",
   ).length;
 
   const receiptsCount =
@@ -107,13 +112,17 @@ export function StudentFinancialOverview({
   const optionalOutstanding = statement.charges.filter(
     (charge) =>
       charge.isOptional &&
-      charge.status === "outstanding" &&
+      charge.remainingAmount > 0 &&
       (charge.category === "meal" || charge.category === "uniform"),
   );
 
   let recommendedAction = "Review fee statement";
-  if (statement.balance > 0) {
+  if (statement.availableCredit > 0 && statement.balance > 0) {
+    recommendedAction = "Apply Available Credit";
+  } else if (statement.balance > 0) {
     recommendedAction = "Record Payment";
+  } else if (statement.availableCredit > 0) {
+    recommendedAction = "Credit on account";
   } else if (optionalOutstanding.length > 0) {
     recommendedAction = "Review Optional Charges";
   } else if (statement.totalCharged > 0 && statement.balance <= 0) {
@@ -135,10 +144,10 @@ export function StudentFinancialOverview({
           Financial overview
         </h2>
         <p className="text-sm text-muted-foreground">
-          Instant view of this student&apos;s fee position for
+          Authoritative account position across all academic years
           {statement.academicYearName
-            ? ` ${statement.academicYearName}`
-            : " the current academic year"}
+            ? ` · current year ${statement.academicYearName}`
+            : ""}
           {statement.currentTermName
             ? ` · ${statement.currentTermName}`
             : ""}
@@ -185,7 +194,7 @@ export function StudentFinancialOverview({
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -206,6 +215,46 @@ export function StudentFinancialOverview({
             >
               {formatKwacha(statement.balance)}
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              BF {formatKwacha(statement.broughtForwardOutstanding)} · Current
+              year {formatKwacha(statement.currentYearOutstanding)}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Available credit
+            </CardTitle>
+            <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
+              <CircleDollarSign
+                className="size-4 text-muted-foreground"
+                aria-hidden
+              />
+            </span>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold tracking-tight tabular-nums text-emerald-700 sm:text-3xl dark:text-emerald-300">
+              {formatKwacha(statement.availableCredit)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Unallocated completed payments — not a negative balance
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Payment status
+            </CardTitle>
+            <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
+              <Receipt className="size-4 text-muted-foreground" aria-hidden />
+            </span>
+          </CardHeader>
+          <CardContent>
+            <StatusBadge tone={statusMeta.tone}>{statusMeta.label}</StatusBadge>
           </CardContent>
         </Card>
 
@@ -231,7 +280,7 @@ export function StudentFinancialOverview({
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total paid
+              Payments received
             </CardTitle>
             <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
               <Banknote className="size-4 text-muted-foreground" aria-hidden />
@@ -241,20 +290,9 @@ export function StudentFinancialOverview({
             <p className="text-2xl font-semibold tracking-tight tabular-nums text-emerald-700 sm:text-3xl dark:text-emerald-300">
               {formatKwacha(statement.totalPaid)}
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Payment status
-            </CardTitle>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
-              <Receipt className="size-4 text-muted-foreground" aria-hidden />
-            </span>
-          </CardHeader>
-          <CardContent>
-            <StatusBadge tone={statusMeta.tone}>{statusMeta.label}</StatusBadge>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Allocated {formatKwacha(statement.totalAllocated)}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -297,8 +335,9 @@ export function StudentFinancialOverview({
             aria-label={`Payment progress ${Math.round(progressPercent)} percent`}
           />
           <p className="text-xs text-muted-foreground">
-            {formatKwacha(statement.totalPaid)} paid of{" "}
-            {formatKwacha(statement.totalCharged)} charged
+            {formatKwacha(statement.totalAllocated)} allocated of{" "}
+            {formatKwacha(statement.totalCharged)} charged ·{" "}
+            {formatKwacha(statement.totalPaid)} received
           </p>
         </CardContent>
       </Card>

@@ -89,6 +89,16 @@ Migrations live in `supabase/migrations/`. They are the **source of truth** for 
 | `20260716150400_revoke_remaining_deletes.sql` | Revoke hard DELETE on remaining operational tables |
 | `20260716150500_search_path_indexes_fee_verify.sql` | Indexes; DEFINER search_path; fee unique verify |
 
+### Phase 2 finance allocation (staging verification)
+
+Do **not** apply or activate payment-allocation cutover on production from this guide alone.
+
+Staging process, migration order, diagnostics/backfill/validate/activate checklist, and readiness report:
+
+- `docs/FINANCE_ALLOCATION_STAGING_RUNBOOK.md`
+- `docs/FINANCE_ALLOCATION_PRODUCTION_READINESS_REPORT.md`
+- `supabase/diagnostics/finance_allocation_staging_verification.sql`
+
 ### Sprint 4 pre-apply detection (run in SQL Editor)
 
 Resolve any rows returned **before** applying Sprint 4 migrations. Do **not** delete blindly.

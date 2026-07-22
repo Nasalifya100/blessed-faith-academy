@@ -183,8 +183,14 @@ export interface StatementCharge {
   category: string;
   isOptional: boolean;
   amount: number;
+  allocatedAmount: number;
+  remainingAmount: number;
+  /** Derived from allocations when possible; status column retained for cancelled/waived. */
   status: string;
   termName: string | null;
+  academicYearName: string | null;
+  academicYearId: string;
+  isBroughtForward: boolean;
   createdAt: string;
   chargeSource: "NORMAL" | "LEGACY_OPENING_BALANCE";
   legacyOriginalAmount: number | null;
@@ -193,29 +199,58 @@ export interface StatementCharge {
   migratedAt: string | null;
 }
 
+export interface StatementPaymentAllocation {
+  id: string;
+  chargeId: string;
+  chargeDescription: string;
+  feeItemName: string;
+  academicYearName: string | null;
+  termName: string | null;
+  amount: number;
+  createdAt: string;
+  reversedAt: string | null;
+}
+
 export interface StatementPayment {
   id: string;
   amount: number;
+  amountAllocated: number;
+  unallocatedCredit: number;
   method: string;
   receiptNumber: string;
   paidOn: string;
   status: string;
   voidReason: string | null;
   voidedAt: string | null;
+  allocations: StatementPaymentAllocation[];
 }
 
 export interface StudentFeeStatement {
   academicYearName: string | null;
   currentTermName: string | null;
   currentTermId: string | null;
+  /** All active (non-cancelled) charges across years — statement listing. */
   charges: StatementCharge[];
+  /** Current-year charges only (for year-scoped views). */
+  currentYearCharges: StatementCharge[];
   /** Completed payments only — used for totals. */
   payments: StatementPayment[];
   /** Voided/reversed payments (history; excluded from totals). */
   voidedPayments: StatementPayment[];
   totalCharged: number;
   totalPaid: number;
+  totalAllocated: number;
+  availableCredit: number;
+  /** Authoritative outstanding = remaining charge balances (all years). */
   balance: number;
+  broughtForwardOutstanding: number;
+  currentYearOutstanding: number;
+  currentYearCharged: number;
+  netAccountPosition: number;
+}
+
+function money(value: number | string | null | undefined): number {
+  return fromNgwee(toNgwee(value ?? 0));
 }
 
 export async function getStudentFeeStatement(
@@ -243,66 +278,117 @@ export async function getStudentFeeStatement(
     currentTermId = term?.id ?? null;
   }
 
-  let charges: StatementCharge[] = [];
-  if (year?.id) {
-    const { data: chargeRows } = await supabase
-      .from("charges")
-      .select(
-        "id, description, amount, status, created_at, charge_source, legacy_original_amount, legacy_previously_paid_amount, legacy_notes, migrated_at, fee_item:fee_items(name, category, is_optional), term:terms(name)",
-      )
-      .eq("student_id", studentId)
-      .eq("academic_year_id", year.id)
-      .neq("status", "cancelled")
-      .order("created_at", { ascending: true });
+  const { data: summaryRaw } = await supabase.rpc("get_student_finance_summary", {
+    p_student_id: studentId,
+  });
+  const summary = (summaryRaw ?? {}) as Record<string, unknown>;
 
-    charges = (
-      (chargeRows as {
-        id: string;
-        description: string | null;
-        amount: number | string;
-        status: string;
-        created_at: string;
-        charge_source: string | null;
-        legacy_original_amount: number | string | null;
-        legacy_previously_paid_amount: number | string | null;
-        legacy_notes: string | null;
-        migrated_at: string | null;
-        fee_item: {
-          name: string;
-          category: string;
-          is_optional: boolean;
-        } | null;
-        term: { name: string } | null;
-      }[] | null) ?? []
-    ).map((row) => {
-      const isLegacy = row.charge_source === "LEGACY_OPENING_BALANCE";
-      return {
-        id: row.id,
-        description: isLegacy
-          ? row.description?.trim() ||
-            `Opening balance — ${row.fee_item?.name ?? "Fee"}`
-          : (row.fee_item?.name ?? row.description ?? "Charge"),
-        feeItemName: row.fee_item?.name ?? "-",
-        category: row.fee_item?.category ?? "other",
-        isOptional: row.fee_item?.is_optional ?? false,
-        amount: fromNgwee(toNgwee(row.amount)),
-        status: row.status,
-        termName: row.term?.name ?? null,
-        createdAt: row.created_at,
-        chargeSource: isLegacy ? "LEGACY_OPENING_BALANCE" : "NORMAL",
-        legacyOriginalAmount:
-          row.legacy_original_amount != null
-            ? fromNgwee(toNgwee(row.legacy_original_amount))
-            : null,
-        legacyPreviouslyPaidAmount:
-          row.legacy_previously_paid_amount != null
-            ? fromNgwee(toNgwee(row.legacy_previously_paid_amount))
-            : null,
-        legacyNotes: row.legacy_notes,
-        migratedAt: row.migrated_at,
-      };
-    });
+  const { data: chargeRows } = await supabase
+    .from("charges")
+    .select(
+      "id, description, amount, status, created_at, academic_year_id, charge_source, legacy_original_amount, legacy_previously_paid_amount, legacy_notes, migrated_at, fee_item:fee_items(name, category, is_optional), term:terms(name), academic_year:academic_years(name)",
+    )
+    .eq("student_id", studentId)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: true });
+
+  const chargeIds =
+    ((chargeRows as { id: string }[] | null) ?? []).map((row) => row.id);
+
+  const allocatedByCharge = new Map<string, number>();
+  if (chargeIds.length > 0) {
+    const { data: allocRows } = await supabase
+      .from("payment_allocations")
+      .select("charge_id, amount, payment:payments!inner(status)")
+      .in("charge_id", chargeIds)
+      .is("reversed_at", null);
+
+    for (const row of (allocRows as {
+      charge_id: string;
+      amount: number | string;
+      payment: { status: string } | null;
+    }[] | null) ?? []) {
+      if (row.payment?.status !== "completed") continue;
+      allocatedByCharge.set(
+        row.charge_id,
+        (allocatedByCharge.get(row.charge_id) ?? 0) + toNgwee(row.amount),
+      );
+    }
   }
+
+  const charges: StatementCharge[] = (
+    (chargeRows as {
+      id: string;
+      description: string | null;
+      amount: number | string;
+      status: string;
+      created_at: string;
+      academic_year_id: string;
+      charge_source: string | null;
+      legacy_original_amount: number | string | null;
+      legacy_previously_paid_amount: number | string | null;
+      legacy_notes: string | null;
+      migrated_at: string | null;
+      fee_item: {
+        name: string;
+        category: string;
+        is_optional: boolean;
+      } | null;
+      term: { name: string } | null;
+      academic_year: { name: string } | null;
+    }[] | null) ?? []
+  ).map((row) => {
+    const isLegacy = row.charge_source === "LEGACY_OPENING_BALANCE";
+    const amount = money(row.amount);
+    const allocatedAmount = fromNgwee(allocatedByCharge.get(row.id) ?? 0);
+    const remainingAmount =
+      row.status === "waived"
+        ? 0
+        : fromNgwee(Math.max(0, toNgwee(amount) - toNgwee(allocatedAmount)));
+    const derivedStatus =
+      row.status === "waived" || row.status === "cancelled"
+        ? row.status
+        : remainingAmount <= 0
+          ? "paid"
+          : allocatedAmount > 0
+            ? "outstanding"
+            : row.status;
+
+    return {
+      id: row.id,
+      description: isLegacy
+        ? row.description?.trim() ||
+          `Opening balance — ${row.fee_item?.name ?? "Fee"}`
+        : (row.fee_item?.name ?? row.description ?? "Charge"),
+      feeItemName: row.fee_item?.name ?? "-",
+      category: row.fee_item?.category ?? "other",
+      isOptional: row.fee_item?.is_optional ?? false,
+      amount,
+      allocatedAmount,
+      remainingAmount,
+      status: derivedStatus,
+      termName: row.term?.name ?? null,
+      academicYearName: row.academic_year?.name ?? null,
+      academicYearId: row.academic_year_id,
+      isBroughtForward: Boolean(year?.id && row.academic_year_id !== year.id),
+      createdAt: row.created_at,
+      chargeSource: isLegacy ? "LEGACY_OPENING_BALANCE" : "NORMAL",
+      legacyOriginalAmount:
+        row.legacy_original_amount != null
+          ? money(row.legacy_original_amount)
+          : null,
+      legacyPreviouslyPaidAmount:
+        row.legacy_previously_paid_amount != null
+          ? money(row.legacy_previously_paid_amount)
+          : null,
+      legacyNotes: row.legacy_notes,
+      migratedAt: row.migrated_at,
+    };
+  });
+
+  const currentYearCharges = year?.id
+    ? charges.filter((charge) => charge.academicYearId === year.id)
+    : charges;
 
   const { data: paymentRows } = await supabase
     .from("payments")
@@ -312,6 +398,52 @@ export async function getStudentFeeStatement(
     .eq("student_id", studentId)
     .in("status", ["completed", "voided"])
     .order("paid_on", { ascending: true });
+
+  const paymentIds =
+    ((paymentRows as { id: string }[] | null) ?? []).map((row) => row.id);
+
+  const allocationsByPayment = new Map<string, StatementPaymentAllocation[]>();
+  if (paymentIds.length > 0) {
+    const { data: paymentAllocRows } = await supabase
+      .from("payment_allocations")
+      .select(
+        "id, payment_id, charge_id, amount, created_at, reversed_at, charge:charges(description, fee_item:fee_items(name), term:terms(name), academic_year:academic_years(name))",
+      )
+      .in("payment_id", paymentIds)
+      .order("created_at", { ascending: true });
+
+    for (const row of (paymentAllocRows as {
+      id: string;
+      payment_id: string;
+      charge_id: string;
+      amount: number | string;
+      created_at: string;
+      reversed_at: string | null;
+      charge: {
+        description: string | null;
+        fee_item: { name: string } | null;
+        term: { name: string } | null;
+        academic_year: { name: string } | null;
+      } | null;
+    }[] | null) ?? []) {
+      const list = allocationsByPayment.get(row.payment_id) ?? [];
+      list.push({
+        id: row.id,
+        chargeId: row.charge_id,
+        chargeDescription:
+          row.charge?.fee_item?.name ??
+          row.charge?.description ??
+          "Charge",
+        feeItemName: row.charge?.fee_item?.name ?? "-",
+        academicYearName: row.charge?.academic_year?.name ?? null,
+        termName: row.charge?.term?.name ?? null,
+        amount: money(row.amount),
+        createdAt: row.created_at,
+        reversedAt: row.reversed_at,
+      });
+      allocationsByPayment.set(row.payment_id, list);
+    }
+  }
 
   const mappedPayments: StatementPayment[] = (
     (paymentRows as {
@@ -324,40 +456,88 @@ export async function getStudentFeeStatement(
       void_reason: string | null;
       voided_at: string | null;
     }[] | null) ?? []
-  ).map((row) => ({
-    id: row.id,
-    amount: fromNgwee(toNgwee(row.amount)),
-    method: row.method,
-    receiptNumber: row.receipt_number,
-    paidOn: row.paid_on,
-    status: row.status,
-    voidReason: row.void_reason,
-    voidedAt: row.voided_at,
-  }));
+  ).map((row) => {
+    const amount = money(row.amount);
+    const allocations = allocationsByPayment.get(row.id) ?? [];
+    const activeAllocNgwee = allocations
+      .filter((a) => !a.reversedAt)
+      .reduce((sum, a) => sum + toNgwee(a.amount), 0);
+    const amountAllocated = fromNgwee(activeAllocNgwee);
+    const unallocatedCredit =
+      row.status === "completed"
+        ? fromNgwee(Math.max(0, toNgwee(amount) - activeAllocNgwee))
+        : 0;
+
+    return {
+      id: row.id,
+      amount,
+      amountAllocated,
+      unallocatedCredit,
+      method: row.method,
+      receiptNumber: row.receipt_number,
+      paidOn: row.paid_on,
+      status: row.status,
+      voidReason: row.void_reason,
+      voidedAt: row.voided_at,
+      allocations,
+    };
+  });
 
   const payments = mappedPayments.filter((p) => p.status === "completed");
   const voidedPayments = mappedPayments.filter((p) => p.status === "voided");
 
-  const totalChargedNgwee = charges
-    .filter((charge) => charge.status !== "waived")
-    .reduce((sum, charge) => sum + toNgwee(charge.amount), 0);
-  const totalPaidNgwee = payments.reduce(
-    (sum, payment) => sum + toNgwee(payment.amount),
-    0,
+  const totalCharged =
+    summary.total_active_charges != null
+      ? money(summary.total_active_charges as number | string)
+      : fromNgwee(
+          charges
+            .filter((c) => c.status !== "waived")
+            .reduce((sum, c) => sum + toNgwee(c.amount), 0),
+        );
+  const totalPaid =
+    summary.total_completed_payments != null
+      ? money(summary.total_completed_payments as number | string)
+      : fromNgwee(payments.reduce((sum, p) => sum + toNgwee(p.amount), 0));
+  const totalAllocated = money(
+    (summary.total_allocated as number | string | undefined) ?? 0,
   );
-  const totalCharged = fromNgwee(totalChargedNgwee);
-  const totalPaid = fromNgwee(totalPaidNgwee);
+  const availableCredit = money(
+    (summary.available_credit as number | string | undefined) ?? 0,
+  );
+  const balance = money(
+    (summary.outstanding_balance as number | string | undefined) ?? 0,
+  );
+  const broughtForwardOutstanding = money(
+    (summary.brought_forward_outstanding as number | string | undefined) ?? 0,
+  );
+  const currentYearOutstanding = money(
+    (summary.current_year_outstanding as number | string | undefined) ?? 0,
+  );
+  const currentYearCharged = money(
+    (summary.current_year_charges as number | string | undefined) ?? 0,
+  );
+  const netAccountPosition = money(
+    (summary.net_account_position as number | string | undefined) ??
+      subKwacha(balance, availableCredit),
+  );
 
   return {
     academicYearName: year?.name ?? null,
     currentTermName,
     currentTermId,
     charges,
+    currentYearCharges,
     payments,
     voidedPayments,
     totalCharged,
     totalPaid,
-    balance: subKwacha(totalCharged, totalPaid),
+    totalAllocated,
+    availableCredit,
+    balance,
+    broughtForwardOutstanding,
+    currentYearOutstanding,
+    currentYearCharged,
+    netAccountPosition,
   };
 }
 
@@ -675,6 +855,8 @@ export interface PaymentReceipt {
   id: string;
   receiptNumber: string;
   amount: number;
+  amountAllocated: number;
+  creditCreated: number;
   method: string;
   referenceNumber: string | null;
   paidOn: string;
@@ -694,8 +876,11 @@ export interface PaymentReceipt {
     address: string | null;
     phone: string | null;
   };
-  /** Current student balance (completed payments only). */
+  /** Remaining outstanding charges after this payment (authoritative). */
   balanceAfter: number;
+  /** Available pupil credit after this payment. */
+  availableCreditAfter: number;
+  allocations: StatementPaymentAllocation[];
 }
 
 export async function getPaymentReceipt(
@@ -771,11 +956,24 @@ export async function getPaymentReceipt(
   }
 
   const statement = await getStudentFeeStatement(payment.student.id);
+  const statementPayment =
+    statement.payments.find((row) => row.id === payment.id) ??
+    statement.voidedPayments.find((row) => row.id === payment.id);
+
+  const amount = money(payment.amount);
+  const amountAllocated = statementPayment?.amountAllocated ?? 0;
+  const creditCreated =
+    payment.status === "completed"
+      ? (statementPayment?.unallocatedCredit ??
+        fromNgwee(Math.max(0, toNgwee(amount) - toNgwee(amountAllocated))))
+      : 0;
 
   return {
     id: payment.id,
     receiptNumber: payment.receipt_number,
-    amount: fromNgwee(toNgwee(payment.amount)),
+    amount,
+    amountAllocated,
+    creditCreated,
     method: payment.method,
     referenceNumber: payment.reference_number,
     paidOn: payment.paid_on,
@@ -802,5 +1000,7 @@ export async function getPaymentReceipt(
       phone: payment.school.phone,
     },
     balanceAfter: statement.balance,
+    availableCreditAfter: statement.availableCredit,
+    allocations: statementPayment?.allocations.filter((a) => !a.reversedAt) ?? [],
   };
 }

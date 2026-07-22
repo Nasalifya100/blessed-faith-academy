@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { toNgwee } from "@/lib/money";
+
 export const FEE_CATEGORIES = [
   "tuition",
   "extra",
@@ -59,33 +61,28 @@ export const PAYMENT_METHOD_LABELS: Record<
   bank_transfer: "Bank transfer",
 };
 
-export const recordPaymentSchema = z
-  .object({
-    studentId: z.string().uuid(),
-    amount: z.number().positive("Amount must be greater than zero"),
-    method: z.enum(PAYMENT_METHODS),
-    idempotencyKey: z.string().uuid("A payment request id is required"),
-    reference_number: z.string().optional().or(z.literal("")),
-    paid_on: z
-      .string()
-      .min(1, "Payment date is required")
-      .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
-    notes: z.string().optional().or(z.literal("")),
-    /** Outstanding balance at form open; overpayment is rejected. */
-    maxAmount: z.number().nonnegative().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.maxAmount != null && data.amount > data.maxAmount) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["amount"],
-        message:
-          data.maxAmount <= 0
-            ? "This student has no outstanding balance."
-            : `Amount cannot exceed the outstanding balance (K${data.maxAmount}).`,
-      });
-    }
-  });
+const twoDecimalAmount = z
+  .number()
+  .positive("Amount must be greater than zero")
+  .refine(
+    (value) => Number.isFinite(value) && toNgwee(value) > 0,
+    "Amount must have at most two decimal places",
+  );
+
+export const recordPaymentSchema = z.object({
+  studentId: z.string().uuid(),
+  amount: twoDecimalAmount,
+  method: z.enum(PAYMENT_METHODS),
+  idempotencyKey: z.string().uuid("A payment request id is required"),
+  reference_number: z.string().optional().or(z.literal("")),
+  paid_on: z
+    .string()
+    .min(1, "Payment date is required")
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
+  notes: z.string().optional().or(z.literal("")),
+  /** Required when the payment will create available credit. */
+  confirmCredit: z.boolean().optional(),
+});
 
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 
@@ -99,6 +96,19 @@ export const voidPaymentSchema = z.object({
 });
 
 export type VoidPaymentInput = z.infer<typeof voidPaymentSchema>;
+
+export const applyAvailableCreditSchema = z.object({
+  studentId: z.string().uuid(),
+  confirm: z
+    .boolean()
+    .refine((value) => value === true, {
+      message: "Confirm applying available credit to outstanding charges.",
+    }),
+});
+
+export type ApplyAvailableCreditInput = z.infer<
+  typeof applyAvailableCreditSchema
+>;
 
 export const optInOptionalFeesSchema = z.object({
   studentId: z.string().uuid(),

@@ -12,6 +12,12 @@ import {
   getStudentProfile,
   getCurrentYearClasses,
 } from "@/features/students/queries";
+import { listStudentProfileChangeHistory } from "@/features/students/profile-change-queries";
+import {
+  EditGuardianProfileForm,
+  EditStudentProfileForm,
+} from "@/features/students/components/edit-profile-forms";
+import { ProfileChangeHistoryPanel } from "@/features/students/components/profile-change-history-panel";
 import {
   getOptionalFeeOptions,
   getStudentFeeStatement,
@@ -35,6 +41,7 @@ import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
 import { OptionalFeesOptInForm } from "@/features/fees/components/optional-fees-opt-in-form";
 import { RecordPaymentForm } from "@/features/fees/components/record-payment-form";
+import { ApplyCreditButton } from "@/features/fees/components/apply-credit-button";
 import { RequirementsChecklist } from "@/features/fees/components/requirements-checklist";
 import { StudentAttendanceHistoryView } from "@/features/attendance/components/student-attendance-history";
 import { RecordDisciplineIncidentForm } from "@/features/discipline/components/record-discipline-incident-form";
@@ -138,6 +145,7 @@ export default async function StudentProfilePage({
     "documents",
     "medical",
     "timeline",
+    "history",
   ]);
   const defaultTab =
     tabParam && allowedTabs.has(tabParam) ? tabParam : "overview";
@@ -188,6 +196,8 @@ export default async function StudentProfilePage({
       DISCIPLINE_RESOLVE_ROLES.includes(role),
   );
   const canSeeMedical = canViewStudentMedical(role);
+  const canEditProfile =
+    Boolean(current?.profile?.is_active) && canManageStudents(role);
   const canArchive =
     Boolean(current?.profile?.is_active) &&
     canManageStudents(role) &&
@@ -198,6 +208,12 @@ export default async function StudentProfilePage({
     student.status === "enrolled" &&
     Boolean(student.currentClassId) &&
     yearClasses.classes.length > 1;
+
+  const profileHistory = await listStudentProfileChangeHistory(student.id, {
+    canViewMedical: canSeeMedical,
+    // Contact fields already appear on the Guardians tab for profile viewers.
+    canViewSensitiveContact: canViewStudentProfile(role),
+  });
 
   const primaryGuardian =
     student.guardians.find((g) => g.isPrimary) ?? student.guardians[0] ?? null;
@@ -297,10 +313,17 @@ export default async function StudentProfilePage({
           <TabsTrigger value="discipline">Discipline</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="medical">Medical</TabsTrigger>
+          <TabsTrigger value="history">Profile Change History</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          {canEditProfile ? (
+            <EditStudentProfileForm
+              student={student}
+              canEditMedical={canSeeMedical}
+            />
+          ) : null}
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="shadow-sm">
               <CardHeader>
@@ -465,6 +488,12 @@ export default async function StudentProfilePage({
                         value={guardian.postalAddress ?? "—"}
                       />
                     </dl>
+                    {canEditProfile ? (
+                      <EditGuardianProfileForm
+                        studentId={student.id}
+                        guardian={guardian}
+                      />
+                    ) : null}
                   </div>
                 ))
               )}
@@ -485,8 +514,16 @@ export default async function StudentProfilePage({
               />
               <RecordPaymentForm
                 studentId={student.id}
-                currentBalance={statement.balance}
+                outstandingBalance={statement.balance}
+                broughtForwardOutstanding={statement.broughtForwardOutstanding}
+                currentYearOutstanding={statement.currentYearOutstanding}
+                availableCredit={statement.availableCredit}
                 studentName={student.fullName}
+              />
+              <ApplyCreditButton
+                studentId={student.id}
+                availableCredit={statement.availableCredit}
+                outstandingBalance={statement.balance}
               />
               <div className="lg:col-span-2">
                 <OptionalFeesOptInForm
@@ -641,6 +678,10 @@ export default async function StudentProfilePage({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ProfileChangeHistoryPanel entries={profileHistory} />
         </TabsContent>
 
         <TabsContent value="timeline">

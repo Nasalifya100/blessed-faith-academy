@@ -120,16 +120,15 @@ describe("admission number normalization", () => {
 });
 
 describe("payment schemas", () => {
-  it("rejects overpayment when maxAmount is set", () => {
+  it("allows overpayment amounts (credit confirmation is handled in the action)", () => {
     const parsed = recordPaymentSchema.safeParse({
       studentId: UUID_A,
       amount: 50,
       method: "mobile_money",
       idempotencyKey: UUID_B,
       paid_on: "2026-07-15",
-      maxAmount: 40,
     });
-    expect(parsed.success).toBe(false);
+    expect(parsed.success).toBe(true);
   });
 
   it("requires void reason", () => {

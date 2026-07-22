@@ -50,12 +50,12 @@ export function FinanceDashboardSummary({
           tone="danger"
         />
         <StatCard
-          title="Collected this term"
+          title="Gross payments received"
           value={formatKwacha(balances.totals.paid)}
           hint={
             termName
-              ? `${termName} · year to date ${yearLabel}`
-              : `Year to date · ${yearLabel}`
+              ? `${termName} · allocated ${formatKwacha(balances.totals.allocated)} · credit ${formatKwacha(balances.totals.availableCredit)}`
+              : `Allocated ${formatKwacha(balances.totals.allocated)} · credit ${formatKwacha(balances.totals.availableCredit)}`
           }
           icon={Banknote}
           tone="success"

@@ -15,7 +15,10 @@ import {
   archiveStudentSchema,
   transferStudentClassSchema,
 } from "./schemas";
-
+import {
+  updateGuardianProfileSchema,
+  updateStudentProfileSchema,
+} from "./profile-change-schemas";
 export interface CreateStudentResult {
   error: string | null;
   studentId: string | null;
@@ -348,4 +351,118 @@ export async function listGuardianCandidatesAction(input: {
       matchReason: row.match_reason,
     })),
   };
+}
+
+export interface ProfileUpdateResult {
+  error: string | null;
+  sharedWithOtherStudents?: number;
+}
+
+export async function updateStudentProfileAction(
+  input: unknown,
+): Promise<ProfileUpdateResult> {
+  const auth = await assertStudentManager();
+  if (!auth.ok) {
+    return { error: auth.error };
+  }
+
+  const parsed = updateStudentProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.issues[0]?.message ??
+        "Please check the form and try again.",
+    };
+  }
+
+  const data = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.rpc("update_student_profile", {
+    p_student_id: data.student_id,
+    p_admission_number: data.admission_number,
+    p_first_name: data.first_name.trim(),
+    p_middle_name: data.middle_name?.trim() ?? "",
+    p_last_name: data.last_name.trim(),
+    p_date_of_birth: data.date_of_birth,
+    p_gender: data.gender,
+    p_enrollment_date: data.enrollment_date,
+    p_place_of_birth: emptyToNull(data.place_of_birth),
+    p_religious_denomination: emptyToNull(data.religious_denomination),
+    p_previous_school: emptyToNull(data.previous_school),
+    p_proposed_admission_date: emptyToNull(data.proposed_admission_date),
+    p_is_zambian_citizen: data.is_zambian_citizen ?? null,
+    p_medical_notes: emptyToNull(data.medical_notes),
+    p_vaccinated_smallpox: data.vaccinated_smallpox ?? null,
+    p_vaccination_date: emptyToNull(data.vaccination_date),
+    p_change_reason: data.change_reason,
+    p_change_note: emptyToNull(data.change_note),
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath(`/dashboard/students/${data.student_id}`);
+  revalidatePath("/dashboard/students");
+  return { error: null };
+}
+
+export async function updateGuardianProfileAction(
+  input: unknown,
+): Promise<ProfileUpdateResult> {
+  const auth = await assertStudentManager();
+  if (!auth.ok) {
+    return { error: auth.error };
+  }
+
+  const parsed = updateGuardianProfileSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.issues[0]?.message ??
+        "Please check the form and try again.",
+    };
+  }
+
+  const data = parsed.data;
+  const supabase = await createSupabaseServerClient();
+
+  const { data: result, error } = await supabase.rpc("update_guardian_profile", {
+    p_student_id: data.student_id,
+    p_guardian_id: data.guardian_id,
+    p_first_name: data.first_name.trim(),
+    p_last_name: data.last_name.trim(),
+    p_phone: emptyToNull(data.phone),
+    p_alt_phone: emptyToNull(data.alt_phone),
+    p_whatsapp: emptyToNull(data.whatsapp),
+    p_email: emptyToNull(data.email),
+    p_national_id: emptyToNull(data.national_id),
+    p_occupation: emptyToNull(data.occupation),
+    p_address: emptyToNull(data.address),
+    p_postal_address: emptyToNull(data.postal_address),
+    p_relationship: data.relationship,
+    p_is_primary_contact: data.is_primary_contact,
+    p_is_emergency_contact: data.is_emergency_contact,
+    p_change_reason: data.change_reason,
+    p_change_note: emptyToNull(data.change_note),
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const shared =
+    typeof result === "object" &&
+    result !== null &&
+    "shared_with_other_students" in result
+      ? Number(
+          (result as { shared_with_other_students?: number })
+            .shared_with_other_students ?? 0,
+        )
+      : 0;
+
+  revalidatePath(`/dashboard/students/${data.student_id}`);
+  revalidatePath("/dashboard/students");
+  return { error: null, sharedWithOtherStudents: shared };
 }

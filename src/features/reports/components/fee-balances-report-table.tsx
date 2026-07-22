@@ -65,8 +65,10 @@ export function FeeBalancesReportTable({ rows }: { rows: FeeBalanceRow[] }) {
               <TableHead>Class</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Charged</TableHead>
-              <TableHead className="text-right">Paid</TableHead>
-              <TableHead className="text-right">Balance</TableHead>
+              <TableHead className="text-right">Received</TableHead>
+              <TableHead className="text-right">Allocated</TableHead>
+              <TableHead className="text-right">Credit</TableHead>
+              <TableHead className="text-right">Outstanding</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -94,6 +96,12 @@ export function FeeBalancesReportTable({ rows }: { rows: FeeBalanceRow[] }) {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatKwacha(row.totalPaid)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatKwacha(row.totalAllocated)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatKwacha(row.availableCredit)}
                   </TableCell>
                   <TableCell
                     className={cn(
@@ -141,7 +149,7 @@ export function FeeBalancesReportTable({ rows }: { rows: FeeBalanceRow[] }) {
                 </div>
                 <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
               </div>
-              <dl className="grid grid-cols-3 gap-2 text-sm">
+              <dl className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">Charged</dt>
                   <dd className="tabular-nums">
@@ -149,13 +157,19 @@ export function FeeBalancesReportTable({ rows }: { rows: FeeBalanceRow[] }) {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Paid</dt>
+                  <dt className="text-xs text-muted-foreground">Received</dt>
                   <dd className="tabular-nums">
                     {formatKwacha(row.totalPaid)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Balance</dt>
+                  <dt className="text-xs text-muted-foreground">Credit</dt>
+                  <dd className="tabular-nums">
+                    {formatKwacha(row.availableCredit)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Outstanding</dt>
                   <dd className="font-medium tabular-nums">
                     {formatKwacha(row.balance)}
                   </dd>

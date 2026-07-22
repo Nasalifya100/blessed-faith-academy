@@ -68,14 +68,29 @@ export default async function FeeBalancesReportPage({
     studentsOwing > 0 ? report.totals.balance / studentsOwing : 0;
 
   const csv = toCsv(
-    ["Admission number", "Student", "Class", "Charged", "Paid", "Balance"],
+    [
+      "Admission number",
+      "Student",
+      "Class",
+      "Charged",
+      "Received",
+      "Allocated",
+      "Available credit",
+      "Outstanding",
+      "Brought forward",
+      "Current year outstanding",
+    ],
     report.rows.map((row) => [
       row.admissionNumber,
       row.fullName,
       row.className ?? "",
       row.totalCharged.toFixed(2),
       row.totalPaid.toFixed(2),
+      row.totalAllocated.toFixed(2),
+      row.availableCredit.toFixed(2),
       row.balance.toFixed(2),
+      row.broughtForwardOutstanding.toFixed(2),
+      row.currentYearOutstanding.toFixed(2),
     ]),
   );
 
@@ -91,7 +106,8 @@ export default async function FeeBalancesReportPage({
           <>
             Blessed Faith Academy · academic year
             {report.academicYearName ? ` ${report.academicYearName}` : ""}.
-            Charges minus completed payments.
+            Outstanding uses charge remainders after allocations. Gross
+            payments received are separate from available credit.
           </>
         }
         breadcrumb={
@@ -150,16 +166,16 @@ export default async function FeeBalancesReportPage({
           tone={report.totals.balance > 0 ? "danger" : "success"}
         />
         <StatCard
-          title="Collected"
+          title="Gross received"
           value={formatKwacha(report.totals.paid)}
-          hint="Completed payments in this view"
+          hint={`Allocated ${formatKwacha(report.totals.allocated)} · credit ${formatKwacha(report.totals.availableCredit)}`}
           icon={Banknote}
           tone="success"
         />
         <StatCard
           title="Students owing"
           value={String(studentsOwing)}
-          hint={`${report.rows.length} row${report.rows.length === 1 ? "" : "s"} shown`}
+          hint={`${report.totals.studentsWithCredit} with available credit · ${report.rows.length} row${report.rows.length === 1 ? "" : "s"} shown`}
           icon={Users}
           tone={studentsOwing > 0 ? "warning" : "success"}
         />
