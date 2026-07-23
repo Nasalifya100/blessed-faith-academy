@@ -289,9 +289,10 @@ Budget-friendly staging runs on **Cloudflare Workers** via `@opennextjs/cloudfla
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Public | Staging project URL (build + runtime) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Staging anon key (build + runtime) |
+| `NEXT_PUBLIC_SITE_URL` | Public | Public app origin for Auth email redirects (no trailing slash). Staging: `https://bfa-sms-staging.nasalifya007.workers.dev`. Local: `http://localhost:3000`. Must **not** be localhost when building/deploying the Worker. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret** | Staging service role only; Cloudflare Secret; never `NEXT_PUBLIC_` |
 
-`NEXT_PUBLIC_SITE_URL` is **not used** by this app. Set Auth **Site URL** / redirect URLs in the Supabase dashboard instead.
+Also configure Supabase Auth **Site URL** and **Redirect URLs** (see `docs/PASSWORD_RESET_FIX_REPORT.md`).
 
 These values are **not** in `wrangler.jsonc` (so keys stay out of git). Set them here:
 

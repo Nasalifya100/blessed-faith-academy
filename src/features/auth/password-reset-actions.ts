@@ -1,14 +1,30 @@
 "use server";
 
+import { headers } from "next/headers";
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
-import { getPasswordResetRedirectUrl } from "@/lib/site-url";
+import {
+  getPasswordResetRedirectUrl,
+  originFromForwardedHeaders,
+} from "@/lib/site-url";
 import { adminSendPasswordResetSchema } from "@/features/auth/password-reset-schemas";
+import { ACCOUNT_NOT_ACTIVATED_MESSAGE } from "@/features/auth/password-recovery";
 
 const SESSION_ERROR = "Your session has expired. Please sign in again.";
 const CONNECTION_ERROR =
   "Couldn't reach the server to verify your account. Check your internet connection and try again.";
+
+async function resolveResetRedirectTo(): Promise<string> {
+  const headerStore = await headers();
+  const requestOrigin = originFromForwardedHeaders({
+    host: headerStore.get("host"),
+    forwardedHost: headerStore.get("x-forwarded-host"),
+    forwardedProto: headerStore.get("x-forwarded-proto"),
+  });
+  return getPasswordResetRedirectUrl(requestOrigin);
+}
 
 async function logPasswordResetEvent(input: {
   targetUserId: string | null;
@@ -123,16 +139,25 @@ export async function adminSendPasswordResetAction(
       failureCategory: "missing_email",
       schoolId: profile.school_id,
     });
-    return { error: "This staff account has no email address on file." };
+    return { error: ACCOUNT_NOT_ACTIVATED_MESSAGE };
   }
 
   const email = authUser.user.email;
-  const redirectTo = getPasswordResetRedirectUrl();
+  let redirectTo: string;
+  try {
+    redirectTo = await resolveResetRedirectTo();
+  } catch {
+    return {
+      error:
+        "Password reset is misconfigured (site URL). Set NEXT_PUBLIC_SITE_URL to the public app origin and try again.",
+    };
+  }
 
-  const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-    email,
-    { redirectTo },
-  );
+  // Send via service-role client so the administrator's browser session is
+  // not involved in the recovery email request.
+  const { error: resetError } = await admin.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
 
   await logPasswordResetEvent({
     targetUserId: staffId,

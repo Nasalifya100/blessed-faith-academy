@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterEach } from "vitest";
 
 import {
   assertSafeAuditMetadata,
@@ -10,8 +10,23 @@ import {
 import {
   getPasswordResetRedirectUrl,
   getSiteUrl,
+  isLocalhostOrigin,
+  isTrustedPasswordResetOrigin,
+  originFromForwardedHeaders,
+  passwordResetLinkErrorMessage,
+  PASSWORD_RESET_LINK_INVALID_MESSAGE,
   safePostAuthPath,
 } from "@/lib/site-url";
+
+const ORIGINAL_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
+
+afterEach(() => {
+  if (ORIGINAL_SITE_URL === undefined) {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+  } else {
+    process.env.NEXT_PUBLIC_SITE_URL = ORIGINAL_SITE_URL;
+  }
+});
 
 describe("resetPasswordSchema", () => {
   it("requires matching passwords with letter and number", () => {
@@ -39,6 +54,17 @@ describe("resetPasswordSchema", () => {
         confirmPassword: "longpassword",
       }).success,
     ).toBe(false);
+  });
+
+  it("rejects mismatched passwords with a clear path error", () => {
+    const result = resetPasswordSchema.safeParse({
+      password: "Secret12",
+      confirmPassword: "Secret99",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toMatch(/do not match/i);
+    }
   });
 });
 
@@ -80,29 +106,74 @@ describe("assertSafeAuditMetadata", () => {
 });
 
 describe("site url helpers", () => {
-  it("builds reset redirect from NEXT_PUBLIC_SITE_URL", () => {
-    const previous = process.env.NEXT_PUBLIC_SITE_URL;
-    process.env.NEXT_PUBLIC_SITE_URL = "https://bfa-sms-staging.example";
-    expect(getSiteUrl()).toBe("https://bfa-sms-staging.example");
-    expect(getPasswordResetRedirectUrl()).toBe(
-      "https://bfa-sms-staging.example/auth/reset-password",
+  it("builds production reset redirect from NEXT_PUBLIC_SITE_URL", () => {
+    process.env.NEXT_PUBLIC_SITE_URL =
+      "https://bfa-sms-staging.nasalifya007.workers.dev";
+    expect(getSiteUrl(null, { nodeEnv: "production" })).toBe(
+      "https://bfa-sms-staging.nasalifya007.workers.dev",
     );
-    if (previous === undefined) {
-      delete process.env.NEXT_PUBLIC_SITE_URL;
-    } else {
-      process.env.NEXT_PUBLIC_SITE_URL = previous;
-    }
+    expect(getPasswordResetRedirectUrl(null, { nodeEnv: "production" })).toBe(
+      "https://bfa-sms-staging.nasalifya007.workers.dev/auth/reset-password",
+    );
+  });
+
+  it("builds local reset redirect from localhost site url", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+    expect(getPasswordResetRedirectUrl(null, { nodeEnv: "development" })).toBe(
+      "http://localhost:3000/auth/reset-password",
+    );
+  });
+
+  it("prefers allowlisted request origin over misconfigured env", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+    expect(
+      getPasswordResetRedirectUrl(
+        "https://bfa-sms-staging.nasalifya007.workers.dev",
+        { nodeEnv: "production" },
+      ),
+    ).toBe(
+      "https://bfa-sms-staging.nasalifya007.workers.dev/auth/reset-password",
+    );
+  });
+
+  it("rejects hardcoded localhost in production when no trusted origin", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+    expect(() => getSiteUrl(null, { nodeEnv: "production" })).toThrow(
+      /must not be localhost/i,
+    );
+  });
+
+  it("does not trust arbitrary request origins", () => {
+    expect(isTrustedPasswordResetOrigin("https://evil.example")).toBe(false);
+    expect(
+      originFromForwardedHeaders({
+        forwardedHost: "evil.example",
+        forwardedProto: "https",
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts staging forwarded headers", () => {
+    expect(
+      originFromForwardedHeaders({
+        forwardedHost: "bfa-sms-staging.nasalifya007.workers.dev",
+        forwardedProto: "https",
+      }),
+    ).toBe("https://bfa-sms-staging.nasalifya007.workers.dev");
   });
 
   it("strips trailing slash from site url", () => {
-    const previous = process.env.NEXT_PUBLIC_SITE_URL;
     process.env.NEXT_PUBLIC_SITE_URL = "https://example.com/";
-    expect(getSiteUrl()).toBe("https://example.com");
-    if (previous === undefined) {
-      delete process.env.NEXT_PUBLIC_SITE_URL;
-    } else {
-      process.env.NEXT_PUBLIC_SITE_URL = previous;
-    }
+    expect(getSiteUrl(null, { nodeEnv: "development" })).toBe(
+      "https://example.com",
+    );
+  });
+
+  it("detects localhost origins", () => {
+    expect(isLocalhostOrigin("http://localhost:3000")).toBe(true);
+    expect(
+      isLocalhostOrigin("https://bfa-sms-staging.nasalifya007.workers.dev"),
+    ).toBe(false);
   });
 
   it("blocks open redirects", () => {
@@ -116,10 +187,24 @@ describe("site url helpers", () => {
   });
 });
 
+describe("password reset link errors", () => {
+  it("maps otp_expired / access_denied to a safe message", () => {
+    expect(
+      passwordResetLinkErrorMessage({
+        error: "access_denied",
+        errorCode: "otp_expired",
+        errorDescription: "Email link is invalid or has expired",
+      }),
+    ).toBe(PASSWORD_RESET_LINK_INVALID_MESSAGE);
+  });
+
+  it("returns null when no error params are present", () => {
+    expect(passwordResetLinkErrorMessage({})).toBeNull();
+  });
+});
+
 describe("admin-only password reset policy", () => {
   it("documents that self-service forgot-password is not offered", () => {
-    // Public recovery is intentionally omitted; only Administrators initiate
-    // resets from Staff. Staff complete the emailed link at /auth/reset-password.
     expect(true).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { logPasswordChangedAction } from "@/features/auth/password-reset-actions";
@@ -12,17 +13,92 @@ import {
   resetPasswordSchema,
   type ResetPasswordInput,
 } from "@/features/auth/password-reset-schemas";
+import {
+  canUpdatePasswordForSession,
+  createRecoveryProof,
+  hasRecoveryCredential,
+  isRecoveryProofValidForUser,
+  maskedRecoveryEmail,
+  parseRecoveryProof,
+  parseRecoveryUrlSignals,
+  PASSWORD_RECOVERY_STORAGE_KEY,
+  serializeRecoveryProof,
+  STALE_SESSION_RESET_MESSAGE,
+  type PasswordRecoveryProof,
+} from "@/features/auth/password-recovery";
+import {
+  PASSWORD_RESET_LINK_INVALID_MESSAGE,
+  passwordResetLinkErrorMessage,
+} from "@/lib/site-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type LinkState = "loading" | "ready" | "invalid";
 
+function scrubResetUrl(url: URL) {
+  const keys = [
+    "code",
+    "token_hash",
+    "type",
+    "error",
+    "error_code",
+    "error_description",
+  ];
+  for (const key of keys) {
+    url.searchParams.delete(key);
+  }
+  url.hash = "";
+  window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+}
+
+function readStoredProof(): PasswordRecoveryProof | null {
+  try {
+    return parseRecoveryProof(
+      sessionStorage.getItem(PASSWORD_RECOVERY_STORAGE_KEY),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredProof(proof: PasswordRecoveryProof) {
+  sessionStorage.setItem(
+    PASSWORD_RECOVERY_STORAGE_KEY,
+    serializeRecoveryProof(proof),
+  );
+}
+
+function clearStoredProof() {
+  try {
+    sessionStorage.removeItem(PASSWORD_RECOVERY_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function hashTokens(href: string): {
+  access_token: string;
+  refresh_token: string;
+} | null {
+  const url = new URL(href);
+  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const access_token = params.get("access_token");
+  const refresh_token = params.get("refresh_token");
+  if (!access_token || !refresh_token) return null;
+  return { access_token, refresh_token };
+}
+
 export function ResetPasswordForm() {
   const router = useRouter();
   const [linkState, setLinkState] = useState<LinkState>("loading");
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [targetEmail, setTargetEmail] = useState<string | null>(null);
+  const [recoveryUserId, setRecoveryUserId] = useState<string | null>(null);
 
   const {
     register,
@@ -36,40 +112,147 @@ export function ResetPasswordForm() {
   useEffect(() => {
     let cancelled = false;
 
+    async function establishFromUser(user: {
+      id: string;
+      email?: string | null;
+    }) {
+      const proof = createRecoveryProof({
+        userId: user.id,
+        email: user.email,
+      });
+      writeStoredProof(proof);
+      if (cancelled) return;
+      setRecoveryUserId(user.id);
+      setTargetEmail(user.email ?? null);
+      setLinkState("ready");
+    }
+
     async function prepareSession() {
       const supabase = createSupabaseBrowserClient();
-      const url = new URL(window.location.href);
-      const code = url.searchParams.get("code");
+      const href = window.location.href;
+      const url = new URL(href);
+      const signals = parseRecoveryUrlSignals(href);
 
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+      const linkErrorMessage = passwordResetLinkErrorMessage({
+        error: signals.error,
+        errorCode: signals.errorCode,
+        errorDescription: signals.errorDescription,
+      });
+      if (linkErrorMessage) {
         if (cancelled) return;
-        if (error) {
-          setLinkState("invalid");
+        clearStoredProof();
+        scrubResetUrl(url);
+        setLinkError(linkErrorMessage);
+        setLinkState("invalid");
+        return;
+      }
+
+      // Consume recovery credentials — never trust a pre-existing session.
+      if (hasRecoveryCredential(signals)) {
+        // Drop any ordinary admin/staff session before establishing recovery.
+        await supabase.auth.signOut({ scope: "local" });
+        clearStoredProof();
+
+        if (signals.code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(
+            signals.code,
+          );
+          if (cancelled) return;
+          if (error || !data.user) {
+            scrubResetUrl(url);
+            setLinkError(PASSWORD_RESET_LINK_INVALID_MESSAGE);
+            setLinkState("invalid");
+            return;
+          }
+          scrubResetUrl(url);
+          await establishFromUser(data.user);
           return;
         }
-        // Remove code from the address bar without a full navigation.
-        url.searchParams.delete("code");
-        window.history.replaceState({}, "", url.pathname);
-        setLinkState("ready");
-        return;
-      }
 
-      const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (data.session) {
-        setLinkState("ready");
-        return;
-      }
+        if (signals.tokenHash && signals.otpType === "recovery") {
+          const { data, error } = await supabase.auth.verifyOtp({
+            type: "recovery" as EmailOtpType,
+            token_hash: signals.tokenHash,
+          });
+          if (cancelled) return;
+          if (error || !data.user) {
+            scrubResetUrl(url);
+            setLinkError(PASSWORD_RESET_LINK_INVALID_MESSAGE);
+            setLinkState("invalid");
+            return;
+          }
+          scrubResetUrl(url);
+          await establishFromUser(data.user);
+          return;
+        }
 
-      // Hash tokens (implicit flow) — give the client a moment to hydrate.
-      if (url.hash.includes("access_token") || url.hash.includes("type=recovery")) {
-        const { data: afterHash } = await supabase.auth.getSession();
+        const tokens = hashTokens(href);
+        if (tokens) {
+          const { data, error } = await supabase.auth.setSession(tokens);
+          if (cancelled) return;
+          if (error || !data.user) {
+            scrubResetUrl(url);
+            setLinkError(PASSWORD_RESET_LINK_INVALID_MESSAGE);
+            setLinkState("invalid");
+            return;
+          }
+          scrubResetUrl(url);
+          await establishFromUser(data.user);
+          return;
+        }
+
+        // Wait briefly for PASSWORD_RECOVERY from detectSessionInUrl.
+        const recovered = await new Promise<boolean>((resolve) => {
+          const timeout = window.setTimeout(() => {
+            subscription.unsubscribe();
+            resolve(false);
+          }, 1500);
+          const {
+            data: { subscription },
+          } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "PASSWORD_RECOVERY" && session?.user) {
+              window.clearTimeout(timeout);
+              subscription.unsubscribe();
+              void establishFromUser(session.user).then(() => resolve(true));
+            }
+          });
+        });
         if (cancelled) return;
-        setLinkState(afterHash.session ? "ready" : "invalid");
+        if (recovered) {
+          scrubResetUrl(url);
+          return;
+        }
+        scrubResetUrl(url);
+        setLinkError(PASSWORD_RESET_LINK_INVALID_MESSAGE);
+        setLinkState("invalid");
         return;
       }
 
+      // No credentials in URL — only continue if this tab already established
+      // recovery (e.g. after scrubbing the query string on refresh).
+      const proof = readStoredProof();
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      if (cancelled) return;
+
+      if (user && isRecoveryProofValidForUser(proof, user.id)) {
+        setRecoveryUserId(user.id);
+        setTargetEmail(user.email ?? proof?.email ?? null);
+        setLinkState("ready");
+        return;
+      }
+
+      if (user && !isRecoveryProofValidForUser(proof, user.id)) {
+        clearStoredProof();
+        scrubResetUrl(url);
+        setLinkError(STALE_SESSION_RESET_MESSAGE);
+        setLinkState("invalid");
+        return;
+      }
+
+      clearStoredProof();
+      scrubResetUrl(url);
+      setLinkError(PASSWORD_RESET_LINK_INVALID_MESSAGE);
       setLinkState("invalid");
     }
 
@@ -82,24 +265,54 @@ export function ResetPasswordForm() {
   async function onSubmit(values: ResetPasswordInput) {
     setServerError(null);
     const supabase = createSupabaseBrowserClient();
+    const proof = readStoredProof();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+
+    const gate = canUpdatePasswordForSession({
+      sessionUserId: user?.id ?? null,
+      recoveryProof: proof,
+    });
+    if (!gate.ok || !user) {
+      setServerError(STALE_SESSION_RESET_MESSAGE);
+      setLinkState("invalid");
+      return;
+    }
+
+    if (recoveryUserId && user.id !== recoveryUserId) {
+      setServerError(STALE_SESSION_RESET_MESSAGE);
+      setLinkState("invalid");
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({
       password: values.password,
     });
 
     if (error) {
-      setServerError(
-        error.message.toLowerCase().includes("session")
-          ? "This reset link is invalid or has expired. Request a new one."
-          : "Could not update your password. Try a new reset link.",
-      );
+      const lower = error.message.toLowerCase();
+      if (lower.includes("session") || lower.includes("expired")) {
+        setServerError(PASSWORD_RESET_LINK_INVALID_MESSAGE);
+      } else if (lower.includes("weak") || lower.includes("password")) {
+        setServerError(
+          "That password does not meet security requirements. Choose a stronger password.",
+        );
+      } else {
+        setServerError(
+          "Could not update your password. Request a new reset link and try again.",
+        );
+      }
       return;
     }
 
     await logPasswordChangedAction();
-    await supabase.auth.signOut();
+    clearStoredProof();
+    await supabase.auth.signOut({ scope: "global" });
     setSuccess(true);
-    router.replace("/login");
-    router.refresh();
+    window.setTimeout(() => {
+      router.replace("/login");
+      router.refresh();
+    }, 1500);
   }
 
   if (linkState === "loading") {
@@ -114,8 +327,12 @@ export function ResetPasswordForm() {
     return (
       <div className="space-y-4">
         <p className="text-sm text-destructive" role="alert">
-          This password reset link is invalid or has expired. Ask an
-          Administrator to send a new reset link from Staff.
+          {linkError ?? PASSWORD_RESET_LINK_INVALID_MESSAGE}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Ask an Administrator to send a new reset link from Staff. Open the
+          newest link from your email — preferably in a private window. Older
+          or already-used links will not work.
         </p>
         <p className="text-center text-sm">
           <Link href="/login" className="underline underline-offset-2">
@@ -129,13 +346,20 @@ export function ResetPasswordForm() {
   if (success) {
     return (
       <p className="text-sm text-muted-foreground" role="status">
-        Password updated. Redirecting to sign in…
+        Password updated successfully. Sign in with your new password…
       </p>
     );
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      {targetEmail ? (
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          Resetting password for:{" "}
+          <span className="font-medium">{maskedRecoveryEmail(targetEmail)}</span>
+        </p>
+      ) : null}
+
       <p className="text-sm text-muted-foreground">
         Choose a new password with at least 8 characters, including a letter
         and a number.
