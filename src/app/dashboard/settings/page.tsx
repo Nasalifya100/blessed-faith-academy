@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils";
 const SECTION_LINKS = [
   { href: "#school-information", label: "School" },
   { href: "#academic-period", label: "Years & terms" },
+  { href: "/dashboard/settings/academics", label: "Academic setup" },
   { href: "#grades", label: "Grades" },
   { href: "#classes", label: "Classes" },
   { href: "#fee-configuration", label: "Fees" },

@@ -110,6 +110,14 @@ export function canViewFinanceMigrationStatus(
   return normalizeStaffRole(role) === "administrator";
 }
 
+/** Academic setup hub (administrator / headteacher defaults). */
+export function canManageAcademicSetup(
+  role: StaffRole | null | undefined,
+): boolean {
+  const normalized = normalizeStaffRole(role);
+  return normalized === "administrator" || normalized === "headteacher";
+}
+
 /** Server-only env gate (never NEXT_PUBLIC). */
 export function isProductionResetEnvEnabled(): boolean {
   return process.env.ALLOW_PRODUCTION_RESET === "true";

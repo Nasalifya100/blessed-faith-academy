@@ -33,6 +33,7 @@
 scripts/.staff-test-inventory.json
 scripts/.staff-test-cleanup-result.json
 scripts/.finance-test-*.json
+scripts/.phase2a-staging-verify-result.json
 
 # debug
 npm-debug.log*
