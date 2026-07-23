@@ -1,0 +1,67 @@
+# Continuous Integration — Blessed Faith Academy SMS
+# Runs on every push/PR to master. Does NOT deploy and does NOT touch Supabase.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Build-time public placeholders only (CI must not require deploy secrets).
+  NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4YW1wbGUiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTY0NTU2Njk5OCwiZXhwIjoxOTYxMTQyOTk4fQ.ci-placeholder-not-a-secret
+  NEXT_PUBLIC_SITE_URL: https://example.com
+
+jobs:
+  verify:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        # No package.json "typecheck" script; tsc is a project dependency and
+        # tsconfig uses noEmit. Production builds also typecheck via next build.
+        run: npx tsc --noEmit
+
+      - name: Build (Next.js)
+        run: npm run build
+
+      - name: Cloudflare / OpenNext build
+        run: npm run cf:build
+
+      - name: Upload OpenNext artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: open-next-${{ github.sha }}
+          path: .open-next
+          if-no-files-found: warn
+          retention-days: 7

@@ -35,6 +35,10 @@ scripts/.staff-test-cleanup-result.json
 scripts/.finance-test-*.json
 scripts/.phase2a-staging-verify-result.json
 scripts/.phase2b-staging-verify-result.json
+scripts/.migration-reconciliation-*.json
+
+# Supabase CLI local link cache (may include pooler URLs)
+supabase/.temp/
 
 # debug
 npm-debug.log*

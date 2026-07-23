@@ -1,0 +1,15 @@
+# Minimal Supabase CLI config for this repository.
+# Migrations: supabase/migrations/
+# Historically applied via SQL Editor — see docs/GITHUB_ACTIONS_PIPELINE.md
+# before using `supabase db push`.
+
+project_id = "qaczvlbgsxcrdcdgsfpo"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15
+
+[db.migrations]
+schema_paths = []

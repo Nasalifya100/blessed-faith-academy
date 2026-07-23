@@ -269,6 +269,17 @@ Changing published fees for a live year should be done carefully in `fee_schedul
 
 ---
 
+## GitHub Actions CI/CD
+
+Automated CI and manual staging deploy are documented in [`docs/GITHUB_ACTIONS_PIPELINE.md`](GITHUB_ACTIONS_PIPELINE.md).
+
+- CI: `.github/workflows/ci.yml` (push/PR to `master`)
+- Staging deploy: `.github/workflows/deploy-staging.yml` (`workflow_dispatch`, Environment `staging`)
+
+Do not run `supabase db push` until migration history is reconciled (SQL Editor history) — see that doc.
+
+---
+
 ## Cloudflare Workers staging (OpenNext)
 
 Budget-friendly staging runs on **Cloudflare Workers** via `@opennextjs/cloudflare` (full-stack Next.js — not a static Pages export).
