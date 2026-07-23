@@ -29,7 +29,8 @@ Controlled workflow verification and Cloudflare deploy were **stopped** so the a
 
 | Field | Value |
 |---|---|
-| Branch | `master` (pending commit of Phase 2B + polish) |
+| Branch | `master` |
+| Implementation commit | `bd6094b` |
 | Supabase project | `blessed-faith-academy` |
 | Project ref | `qaczvlbgsxcrdcdgsfpo` |
 | Worker target | `bfa-sms-staging` |
