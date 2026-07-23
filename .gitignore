@@ -29,6 +29,11 @@
 .DS_Store
 *.pem
 
+# Local cleanup inventory artefacts (may contain emails / ids)
+scripts/.staff-test-inventory.json
+scripts/.staff-test-cleanup-result.json
+scripts/.finance-test-*.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
