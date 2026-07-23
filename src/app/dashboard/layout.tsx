@@ -103,6 +103,16 @@ export default async function DashboardLayout({
         "teacher",
       ].includes(current.profile.role),
   );
+  const canSeeExaminations = Boolean(
+    current.profile?.role &&
+      [
+        "administrator",
+        "headteacher",
+        "teacher",
+        "secretary",
+        "bursar",
+      ].includes(current.profile.role),
+  );
 
   const links: DashboardNavLink[] = [
     { href: "/dashboard", label: "Dashboard" },
@@ -116,6 +126,9 @@ export default async function DashboardLayout({
       ? [{ href: "/dashboard/attendance", label: "Attendance" }]
       : []),
     ...(canSeeFees ? [{ href: "/dashboard/fees", label: "Fees" }] : []),
+    ...(canSeeExaminations
+      ? [{ href: "/dashboard/examinations", label: "Examinations" }]
+      : []),
     ...(canSeeRules ? [{ href: "/dashboard/rules", label: "Rules" }] : []),
     ...(canSeeDiscipline
       ? [{ href: "/dashboard/discipline", label: "Discipline" }]
