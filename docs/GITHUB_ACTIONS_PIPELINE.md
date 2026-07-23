@@ -1,12 +1,14 @@
 # GitHub Actions CI/CD — Blessed Faith Academy SMS
 
 **Repository:** `blessed-faith-academy`  
-**Canonical local path:** `C:\Users\nasa\Documents\GitHub\blessed-faith-academy` (deprecated: Desktop `Blessed_Faith_Academy`)  
+**Canonical local path:** `C:\Users\nasa\Documents\GitHub\blessed-faith-academy`  
+**Working rule:** Run from the **repository root** only.  
 **Worker:** `bfa-sms-staging`  
 **Staging URL:** https://bfa-sms-staging.nasalifya007.workers.dev  
 **Supabase project ref:** `qaczvlbgsxcrdcdgsfpo` (staging / pre-production)
 
-Path and migration verification: `docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md`.
+Path and migration verification: `docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md`.  
+First automated deploy checklist: `docs/FIRST_AUTOMATED_DEPLOYMENT_CHECKLIST.md`.
 
 This document matches the **actual** repository scripts and deployment path (OpenNext Cloudflare), not a generic template.
 

@@ -8,12 +8,12 @@
 | Role | Path |
 | --- | --- |
 | **Canonical repository (only valid)** | `C:\Users\nasa\Documents\GitHub\blessed-faith-academy` |
-| **Deprecated — do not use** | `C:\Users\nasa\Desktop\Blessed_Faith_Academy` (and any nested `blessed-faith-academy` under Desktop) |
+| **Working rule** | Run every command from the **repository root**. Do not use older local clones. |
 | **Git remote** | `https://github.com/Nasalifya100/blessed-faith-academy.git` |
 | **Supabase project** | `blessed-faith-academy` |
 | **Supabase project ref** | `qaczvlbgsxcrdcdgsfpo` |
 
-Always run Git, Supabase CLI, npm, verification, and documentation updates from the **repository root** (the canonical path above). Prefer saying “run from the repository root” over hard-coding machine paths in scripts or GitHub Actions.
+Always run Git, Supabase CLI, npm, verification, and documentation updates from the **repository root**. Prefer saying “run from the repository root” over hard-coding machine paths in scripts or GitHub Actions.
 
 ## Commands that must run from the repository root
 
@@ -106,4 +106,4 @@ GitHub Actions must **not** rely on a developer’s local `supabase/.temp` link.
 
 ## Duplicate clone warning
 
-A second clone may still exist under the deprecated Desktop path. Prefer the Documents path only. After switching, run `git pull origin master` so the working tree includes the pre-automation checkpoint (`v1.0-pre-cicd` / commit `612a93d` or later).
+If another local folder still holds an older copy of this project, ignore it. Open only the canonical repository path above, then `git pull origin master` so the working tree matches `origin/master`.

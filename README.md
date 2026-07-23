@@ -21,7 +21,7 @@ Web-based school management for **Blessed Faith Academy** (Zambia). Staff can ma
 
 ## Quick start
 
-1. Clone or open the repository root (`C:\Users\nasa\Documents\GitHub\blessed-faith-academy` on this machine). Do not use the old Desktop `Blessed_Faith_Academy` copy.
+1. Open the repository root (`C:\Users\nasa\Documents\GitHub\blessed-faith-academy` on this machine). Always run commands from the **repository root**; do not use older local clones.
 2. Copy `.env.example` to `.env.local` and fill in Supabase values (see [Operations](docs/OPERATIONS.md#environment-variables)).
 3. Schema is applied via timestamped files in `supabase/migrations/` (CLI `db push` / GitHub Actions). Do not edit or re-run already applied migrations. See [Operations](docs/OPERATIONS.md#database-migrations).
 4. Install and run from the **repository root**:

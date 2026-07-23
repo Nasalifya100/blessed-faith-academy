@@ -3,9 +3,9 @@
 Setup, database migrations, architecture, and maintenance for the Blessed Faith Academy School Management System.
 
 **Canonical local path:** `C:\Users\nasa\Documents\GitHub\blessed-faith-academy`  
-**Deprecated path (do not use):** `C:\Users\nasa\Desktop\Blessed_Faith_Academy`  
+**Working rule:** Always run Git, Supabase CLI, npm, and verification from the **repository root**. Do not use older local clones.
 
-See also: `docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md`.
+See also: `docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md` and `docs/FIRST_AUTOMATED_DEPLOYMENT_CHECKLIST.md`.
 
 ---
 

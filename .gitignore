@@ -22,6 +22,14 @@
 .wrangler/
 .dev.vars
 
+# Database dumps / sensitive exports (never commit)
+*.dump
+*.pgdump
+*.sql.gz
+*.sql.bak
+/db-dumps/
+/dumps/
+
 # production
 /build
 
