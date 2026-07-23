@@ -11,6 +11,7 @@ Web-based school management for **Blessed Faith Academy** (Zambia). Staff can ma
 |---|---|
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Office staff, teachers, bursar — how to use the system day to day |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Developers / IT — setup, migrations, env, architecture |
+| [docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md](docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md) | Canonical repo path, remote Supabase, CI/CD readiness |
 
 ## Tech stack
 
@@ -20,12 +21,12 @@ Web-based school management for **Blessed Faith Academy** (Zambia). Staff can ma
 
 ## Quick start
 
-1. Copy `.env.example` to `.env.local` and fill in Supabase values (see [Operations](docs/OPERATIONS.md#environment-variables)).
-2. Run all SQL migrations in order in the Supabase SQL Editor (see [Operations](docs/OPERATIONS.md#database-migrations)).
-3. Install and run:
+1. Clone or open the repository root (`C:\Users\nasa\Documents\GitHub\blessed-faith-academy` on this machine). Do not use the old Desktop `Blessed_Faith_Academy` copy.
+2. Copy `.env.example` to `.env.local` and fill in Supabase values (see [Operations](docs/OPERATIONS.md#environment-variables)).
+3. Schema is applied via timestamped files in `supabase/migrations/` (CLI `db push` / GitHub Actions). Do not edit or re-run already applied migrations. See [Operations](docs/OPERATIONS.md#database-migrations).
+4. Install and run from the **repository root**:
 
 ```bash
-cd blessed-faith-academy
 npm install
 npm run dev
 ```

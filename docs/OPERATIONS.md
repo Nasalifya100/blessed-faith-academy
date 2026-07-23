@@ -2,7 +2,10 @@
 
 Setup, database migrations, architecture, and maintenance for the Blessed Faith Academy School Management System.
 
-App root: `blessed-faith-academy/`
+**Canonical local path:** `C:\Users\nasa\Documents\GitHub\blessed-faith-academy`  
+**Deprecated path (do not use):** `C:\Users\nasa\Desktop\Blessed_Faith_Academy`  
+
+See also: `docs/REPOSITORY_AND_SUPABASE_PATH_VERIFICATION.md`.
 
 ---
 
@@ -22,8 +25,9 @@ Get values from the Supabase dashboard: **Project Settings → API**.
 
 ## Local development
 
+Run all commands from the **repository root**.
+
 ```bash
-cd blessed-faith-academy
 npm install
 npm run dev
 ```

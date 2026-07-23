@@ -39,6 +39,7 @@ scripts/.migration-reconciliation-*.json
 
 # Supabase CLI local link cache (may include pooler URLs)
 supabase/.temp/
+.supabase/
 
 # debug
 npm-debug.log*
