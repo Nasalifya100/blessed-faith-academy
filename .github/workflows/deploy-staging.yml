@@ -254,6 +254,12 @@ jobs:
           # Post-migration structure only — no behavioural fixtures.
           node scripts/phase2c-stage1-verify.cjs
 
+      - name: Run Phase 2D results structural verification
+        run: |
+          set -euo pipefail
+          # Post-migration structure only — named RPC probes; no fixtures.
+          node scripts/phase2d-stage1-verify.cjs
+
   deploy:
     name: Phase 5 — Cloudflare deploy
     needs: [verify, migrations, verification]
@@ -354,4 +360,5 @@ jobs:
             echo ""
             echo "Verification command: \`node scripts/phase2b-staging-verify.cjs all\`"
             echo "Phase 2C structure: \`node scripts/phase2c-stage1-verify.cjs\`"
+            echo "Phase 2D structure: \`node scripts/phase2d-stage1-verify.cjs\`"
           } >> "$GITHUB_STEP_SUMMARY"
