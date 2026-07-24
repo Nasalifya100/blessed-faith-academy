@@ -324,7 +324,8 @@ Local `next dev` continues to use `.env.local`. For Workers preview, copy `.dev.
 ```bash
 npm run dev       # Next.js in Node (fast iteration)
 npm run preview   # OpenNext build + workerd (closest to staging)
-npm run deploy    # Build + deploy (only when explicitly approved)
+npm run deploy    # Build + upload Worker version + promote 100% traffic
+                  # (versions upload, then versions deploy <id>@100% --yes)
 ```
 
 Compatibility flags in `wrangler.jsonc`: `nodejs_compat`, `global_fetch_strictly_public`.

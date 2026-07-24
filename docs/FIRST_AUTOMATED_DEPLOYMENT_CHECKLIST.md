@@ -45,9 +45,15 @@ Working rule: run every command from the **repository root**. Do not use older l
 4. Phase 5 — Cloudflare deploy (if Deploy = true)
    AFTER verification succeeds or is skipped
    → npm run deploy
+     (= OpenNext build
+      → wrangler versions upload
+      → wrangler versions deploy <version-id>@100% --name bfa-sms-staging --yes)
 
 5. Phase 6 — summary (always)
 ```
+
+**Important:** `wrangler versions upload` alone does **not** move live traffic. Promotion to 100% is required and must succeed or the job fails.
+
 
 CI workflow (`.github/workflows/ci.yml`) runs lint/test/typecheck/build/cf:build on push/PR to `master` and does **not** touch Supabase or deploy.
 

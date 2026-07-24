@@ -245,27 +245,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy (OpenNext + Wrangler)
+      - name: Upload Worker version and promote to 100% traffic
+        id: version
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-        run: npm run deploy
-
-      - name: Capture Worker version
-        id: version
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          # Best-effort: first Version ID from wrangler deployments list
-          out="$(npx wrangler deployments list --name bfa-sms-staging 2>/dev/null | head -n 40 || true)"
-          echo "$out"
-          ver="$(echo "$out" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -n 1 || true)"
-          echo "version=${ver:-unknown}" >> "$GITHUB_OUTPUT"
+          # Builds OpenNext, uploads via wrangler versions upload, then promotes:
+          #   npx wrangler versions deploy <version-id>@100% --name bfa-sms-staging --yes
+          # Exits non-zero if upload or promotion fails (no silent upload-only success).
+          npm run deploy
+
+      - name: Confirm promoted version id
+        run: |
+          set -euo pipefail
+          if [ -z "${{ steps.version.outputs.version }}" ]; then
+            echo "Worker Version ID was not written to GITHUB_OUTPUT after promote."
+            exit 1
+          fi
+          echo "Promoted Worker Version: ${{ steps.version.outputs.version }}"
 
   summary:
     name: Phase 6 — Summary
@@ -298,10 +300,11 @@ jobs:
             echo "| Verification job | \`$VER\` (${VER_OUT:-n/a}) |"
             echo "| Deploy job | \`$DEP\` |"
             echo "| Worker name | \`bfa-sms-staging\` |"
-            echo "| Worker version | \`${WORKER_VER:-n/a}\` |"
+            echo "| Promoted Worker version (100% traffic) | \`${WORKER_VER:-n/a}\` |"
             echo "| Deployment URL | https://bfa-sms-staging.nasalifya007.workers.dev |"
             echo ""
             echo "Repository deploy command: \`npm run deploy\`"
+            echo "(upload version + \`wrangler versions deploy <id>@100% --yes\`)"
             echo ""
             echo "Verification command: \`node scripts/phase2b-staging-verify.cjs all\`"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -23,7 +23,7 @@ This document matches the **actual** repository scripts and deployment path (Ope
 | Typecheck | `npx tsc --noEmit` (no `typecheck` script; `typescript` is a dependency; `npm run build` also typechecks) |
 | Next.js build | `npm run build` (`next build --webpack`) |
 | OpenNext / Cloudflare build | `npm run cf:build` |
-| Deploy staging Worker | `npm run deploy` (`opennextjs-cloudflare build && opennextjs-cloudflare deploy -- --keep-vars`) |
+| Deploy live Worker | `npm run deploy` (`opennextjs-cloudflare build` → `versions upload` → `wrangler versions deploy <id>@100% --yes`) |
 | Phase 2B verification | `node scripts/phase2b-staging-verify.cjs all` |
 | Migration safety gate | `node scripts/ci-supabase-migration-gate.cjs` |
 
@@ -72,7 +72,7 @@ Never commit secrets. Never print secret values in logs or summaries.
 
 ### 3. Cloudflare runtime secrets
 
-`npm run deploy` uses `--keep-vars`, so existing Worker dashboard variables/secrets are retained. Ensure the Worker already has:
+`npm run deploy` uploads with `--keep-vars` (dashboard variables/secrets retained), then promotes the new version to **100%** traffic. Ensure the Worker already has:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
