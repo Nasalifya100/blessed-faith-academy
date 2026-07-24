@@ -1,10 +1,13 @@
-# Staging deployment — Blessed Faith Academy SMS
-# Manual only (workflow_dispatch). Uses GitHub Environment "staging".
-# Does not invent Wrangler flags; uses repository script: npm run deploy
+# Production deployment — Blessed Faith Academy SMS
+# Automatic on push to master; manual via workflow_dispatch.
+# Uses GitHub Environment "staging". Worker: bfa-sms-staging (live production app).
 
 name: Deploy staging
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       apply_migrations:
@@ -12,7 +15,7 @@ on:
         type: boolean
         default: false
       run_verification:
-        description: Run Phase 2B staging verification script
+        description: Run Phase 2B DB verification (always forced when Deploy is true)
         type: boolean
         default: true
       deploy:
@@ -21,7 +24,7 @@ on:
         default: true
 
 concurrency:
-  group: deploy-staging
+  group: production-deploy
   cancel-in-progress: false
 
 permissions:
@@ -69,7 +72,9 @@ jobs:
   migrations:
     name: Phase 2–3 — Supabase migrations
     needs: verify
-    if: ${{ inputs.apply_migrations }}
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.apply_migrations)
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 30
@@ -173,9 +178,15 @@ jobs:
     needs: [verify, migrations]
     if: |
       always() &&
-      inputs.run_verification &&
       needs.verify.result == 'success' &&
-      (needs.migrations.result == 'success' || needs.migrations.result == 'skipped')
+      (needs.migrations.result == 'success' || needs.migrations.result == 'skipped') &&
+      (
+        github.event_name == 'push' ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.run_verification || inputs.deploy)
+        )
+      )
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 30
@@ -222,10 +233,13 @@ jobs:
     needs: [verify, migrations, verification]
     if: |
       always() &&
-      inputs.deploy &&
       needs.verify.result == 'success' &&
       (needs.migrations.result == 'success' || needs.migrations.result == 'skipped') &&
-      (needs.verification.result == 'success' || needs.verification.result == 'skipped')
+      needs.verification.result == 'success' &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy)
+      )
     runs-on: ubuntu-latest
     environment: staging
     timeout-minutes: 45
@@ -280,6 +294,7 @@ jobs:
       - name: Job summary
         env:
           COMMIT: ${{ github.sha }}
+          TRIGGER: ${{ github.event_name }}
           MIG: ${{ needs.migrations.result }}
           MIG_OUT: ${{ needs.migrations.outputs.migration_result }}
           VER: ${{ needs.verification.result }}
@@ -288,20 +303,25 @@ jobs:
           WORKER_VER: ${{ needs.deploy.outputs.worker_version }}
         run: |
           {
-            echo "## Staging deploy summary"
+            echo "## Production deploy summary"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
+            echo "| Trigger | \`$TRIGGER\` |"
             echo "| Commit | \`$COMMIT\` |"
-            echo "| Apply migrations input | \`${{ inputs.apply_migrations }}\` |"
-            echo "| Run verification input | \`${{ inputs.run_verification }}\` |"
-            echo "| Deploy input | \`${{ inputs.deploy }}\` |"
+            if [ "$TRIGGER" = "workflow_dispatch" ]; then
+              echo "| Apply migrations input | \`${{ inputs.apply_migrations }}\` |"
+              echo "| Run verification input | \`${{ inputs.run_verification }}\` |"
+              echo "| Deploy input | \`${{ inputs.deploy }}\` |"
+            else
+              echo "| Automatic push pipeline | migrations + verification + deploy |"
+            fi
             echo "| Migrations job | \`$MIG\` (${MIG_OUT:-n/a}) |"
             echo "| Verification job | \`$VER\` (${VER_OUT:-n/a}) |"
             echo "| Deploy job | \`$DEP\` |"
             echo "| Worker name | \`bfa-sms-staging\` |"
             echo "| Promoted Worker version (100% traffic) | \`${WORKER_VER:-n/a}\` |"
-            echo "| Deployment URL | https://bfa-sms-staging.nasalifya007.workers.dev |"
+            echo "| Live URL | https://bfa-sms-staging.nasalifya007.workers.dev |"
             echo ""
             echo "Repository deploy command: \`npm run deploy\`"
             echo "(upload version + \`wrangler versions deploy <id>@100% --yes\`)"

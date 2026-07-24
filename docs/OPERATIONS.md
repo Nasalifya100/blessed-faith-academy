@@ -275,12 +275,16 @@ Changing published fees for a live year should be done carefully in `fee_schedul
 
 ## GitHub Actions CI/CD
 
-Automated CI and manual staging deploy are documented in [`docs/GITHUB_ACTIONS_PIPELINE.md`](GITHUB_ACTIONS_PIPELINE.md).
+Automated CI/CD is documented in [`docs/GITHUB_ACTIONS_PIPELINE.md`](GITHUB_ACTIONS_PIPELINE.md).
 
-- CI: `.github/workflows/ci.yml` (push/PR to `master`)
-- Staging deploy: `.github/workflows/deploy-staging.yml` (`workflow_dispatch`, Environment `staging`)
+- **CI:** `.github/workflows/ci.yml` — push/PR to `master` (verify only, no secrets)
+- **Production deploy:** `.github/workflows/deploy-staging.yml` — **automatic on push to `master`** plus manual `workflow_dispatch` (Environment `staging`)
 
-Do not run `supabase db push` until migration history is reconciled (SQL Editor history) — see that doc.
+Developer flow: `git push origin master` → verify → migrate (pending only) → DB verification → Worker upload → promote @100%.
+
+Production deploys are serialized (`production-deploy`, `cancel-in-progress: false`) so newer pushes wait; verification is mandatory for every deployment.
+
+Do not run `supabase db push` locally until migration history is reconciled (SQL Editor history) — see that doc. The automated pipeline uses the same migration gate before any push.
 
 ---
 

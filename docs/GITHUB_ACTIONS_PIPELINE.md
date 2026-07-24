@@ -36,7 +36,39 @@ Node version for CI: **22** LTS (see `.nvmrc`; `docs/OPERATIONS.md` requires Nod
 | File | Trigger | Deploys? | Touches Supabase? |
 |---|---|---|---|
 | `.github/workflows/ci.yml` | Push / PR → `master` | No | No |
-| `.github/workflows/deploy-staging.yml` | Manual `workflow_dispatch` | Optional | Optional |
+| `.github/workflows/deploy-staging.yml` | **Push → `master`** + manual `workflow_dispatch` | Yes (automatic on push) | Yes (automatic on push) |
+
+Both workflows run on push to `master`. CI is a fast, secret-free verify-only pass for PRs and pushes. **Deploy staging** is the production pipeline (verify → migrate → DB verify → upload → promote).
+
+**Concurrency:** deploy workflow uses `group: production-deploy` with `cancel-in-progress: false`. Production runs are **serialized**: only one deploy runs at a time; newer pushes **wait** until the active deployment finishes (they do not cancel a run that may be applying migrations).
+
+**Verification is mandatory for every deployment.** Phase 1 (lint/test/tsc/build/cf:build) always runs. Phase 4 (DB verification) always runs when Deploy is enabled — including manual `workflow_dispatch` even if **Run verification** is set to false.
+
+---
+
+## Developer workflow (automatic production deploy)
+
+After CI/CD automation is enabled, pushing to `master` deploys production automatically:
+
+```bash
+git add .
+git commit -m "message"
+git push origin master
+```
+
+GitHub then runs **Deploy staging** automatically:
+
+```text
+✓ Phase 1 — verify        lint, test, tsc, build, cf:build
+✓ Phase 2–3 — migrations  migration list → gate → supabase db push (pending only)
+✓ Phase 4 — verification  node scripts/phase2b-staging-verify.cjs all
+✓ Phase 5 — deploy        npm run deploy (upload + promote @100%)
+✓ Phase 6 — summary       commit SHA, Worker version, live URL
+```
+
+**Deploy only proceeds if every required phase succeeds.** Any failure in verify, migrations, verification, upload, or promotion fails the workflow immediately.
+
+Manual deployments remain available: **Actions → Deploy staging → Run workflow** (`workflow_dispatch`).
 
 ---
 
@@ -153,26 +185,51 @@ This applies **only** versions that are Local and not yet Remote. Stop immediate
 
 ---
 
-## Normal deployment workflow
+## Deployment triggers
 
-1. Open **Actions** → **Deploy staging** → **Run workflow**.  
-2. Choose inputs:
+### Automatic (push to `master`)
 
-| Input | Typical production-like run |
+Every push to `master` runs the **full** pipeline:
+
+| Phase | Runs on push? |
 |---|---|
-| Apply migrations | `true` only after history is reconciled |
-| Run verification | `true` |
-| Deploy | `true` |
+| Verify (lint, test, tsc, build, cf:build) | Always |
+| Migrations (gate + pending `db push`) | Always |
+| Phase 2B verification | Always |
+| Cloudflare upload + promote @100% | Always |
 
-3. Phases:
+No workflow inputs are required. Secrets are read from GitHub Environment **`staging`**.
 
-1. Repository: `lint` → `test` → `tsc` → `build` → `cf:build`  
-2. Supabase: `migration list` → gate → optional `db push`  
-3. Verification: `node scripts/phase2b-staging-verify.cjs all`  
-4. Deploy: `npm run deploy`  
-5. Job summary: commit, migration/verify results, Worker name/version, URL  
+### Manual (`workflow_dispatch`)
+
+**Actions → Deploy staging → Run workflow** with optional inputs:
+
+| Input | Default | Purpose |
+|---|---|---|
+| Apply migrations | `false` | Run migration gate + `supabase db push` |
+| Run verification | `true` | Run Phase 2B DB verification (verification-only / diagnostics) |
+| Deploy | `true` | Upload Worker version and promote to 100% |
+
+**Safety rules for manual runs:**
+
+- Phase 1 (lint, test, tsc, build, cf:build) **always** runs — it cannot be skipped.
+- If **Deploy = true**, Phase 4 DB verification **always** runs, even when **Run verification = false**.
+- Deploy requires `needs.verification.result == 'success'` — skipped or failed verification blocks deploy.
+- Use **Run verification = true** with **Deploy = false** for verification-only diagnostic runs.
+
+Use manual dispatch to redeploy without migrations, or run diagnostics without deploying.
+
+### Deployment sequence (all paths)
+
+1. **Verify:** `lint` → `test` → `tsc` → `build` → `cf:build`  
+2. **Migrations:** `migration list` → `ci-supabase-migration-gate.cjs` → `db push` (pending only; never reset; never re-run applied migrations)  
+3. **Verification:** `node scripts/phase2b-staging-verify.cjs all`  
+4. **Deploy:** `npm run deploy` → `wrangler versions upload` → `wrangler versions deploy <version-id>@100% --yes`  
+5. **Summary:** commit, job results, promoted Worker version, live URL  
 
 Verification writes a temporary `.env.local` from secrets (script expects that file).
+
+**Migration safety:** the gate blocks `db push` when remote history is unsynchronized. `db push` applies **only** pending migrations. The workflow never runs `db reset` or re-applies already-recorded versions.
 
 ---
 
@@ -194,22 +251,30 @@ No deploy. No Supabase. Duplicate runs cancelled via concurrency.
 
 ## Rollback
 
-### Application (Worker)
+### Application (Worker) — fastest
 
-1. Cloudflare Dashboard → Workers → `bfa-sms-staging` → Deployments → roll back to previous version.  
-2. Or redeploy a known-good git SHA:
+1. **Cloudflare Dashboard** → Workers → `bfa-sms-staging` → **Deployments** → select the previous good version → **Rollback** (or promote an earlier version to 100% traffic).  
+2. **Redeploy a known-good commit via GitHub:** checkout the good SHA on `master` (revert commit or cherry-pick fix), push, and let the automatic pipeline run — or use **workflow_dispatch** on the good commit with **Apply migrations = false**.  
+3. **Local emergency redeploy** (requires Cloudflare credentials):
 
 ```bash
 git checkout <good-sha>
 npm run deploy
 ```
 
+Database schema is **not** rolled back when you roll back the Worker.
+
 ### Database
 
-- Prefer forward-fix migrations.  
-- Do **not** re-run old SQL Editor files.  
-- If a `db push` fails mid-way, fix the failing migration and re-run; use `supabase migration list` to see what applied.  
+- Prefer **forward-fix** migrations (new timestamped file).  
+- Do **not** edit or re-run already applied migration files.  
+- Do **not** use `supabase db reset` on staging/production.  
+- If `db push` fails mid-way, inspect Actions logs and `supabase migration list`; fix the failing migration and push a new migration.  
 - `migration repair` only adjusts **history**, not schema — use carefully.
+
+### Cancel a bad deploy in progress
+
+Cancel the run manually in **Actions** if you must stop it. Concurrency group `production-deploy` with `cancel-in-progress: false` **queues** newer pushes — they wait for the active production deploy (and any in-flight migrations) to finish; they do **not** cancel it.
 
 ---
 

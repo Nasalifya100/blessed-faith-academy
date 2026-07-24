@@ -1,13 +1,40 @@
-# First automated staging deployment checklist
+# Production deployment checklist (automatic CI/CD)
 
 **Repository root:** `C:\Users\nasa\Documents\GitHub\blessed-faith-academy`  
 **Branch:** `master`  
 **Remote:** `origin` → `https://github.com/Nasalifya100/blessed-faith-academy.git`  
 **Supabase project:** `blessed-faith-academy` (`qaczvlbgsxcrdcdgsfpo`)  
 **Worker:** `bfa-sms-staging`  
-**Staging URL:** https://bfa-sms-staging.nasalifya007.workers.dev  
+**Live URL:** https://bfa-sms-staging.nasalifya007.workers.dev  
 
 Working rule: run every command from the **repository root**. Do not use older local clones.
+
+---
+
+## Developer workflow (automatic)
+
+```bash
+git add .
+git commit -m "message"
+git push origin master
+```
+
+↓ GitHub **Deploy staging** runs automatically:
+
+| Step | Action |
+| --- | --- |
+| ✓ Verify | lint, test, tsc, build, cf:build |
+| ✓ Migrate | pending migrations only (gate + `db push`) |
+| ✓ DB verify | `phase2b-staging-verify.cjs all` |
+| ✓ Upload | `wrangler versions upload` |
+| ✓ Promote | `wrangler versions deploy <id>@100%` |
+| ✓ Summary | commit SHA + Worker version |
+
+Manual deploy: **Actions → Deploy staging → Run workflow** (`workflow_dispatch` still enabled).
+
+**Concurrency:** `production-deploy` with `cancel-in-progress: false` — production deploys are **serialized**. Newer pushes **wait**; they do not cancel an active run that may be applying migrations.
+
+**Verification:** mandatory for every deployment (Phase 1 always; Phase 4 DB verification always when Deploy is enabled).
 
 ---
 
@@ -31,19 +58,20 @@ Working rule: run every command from the **repository root**. Do not use older l
    → npm run lint → npm test → npx tsc --noEmit
    → npm run build → npm run cf:build
 
-2. Phase 2–3 — migrations (if Apply migrations = true)
+2. Phase 2–3 — migrations (always on push; optional on manual dispatch)
    checkout → Node 22 → supabase/setup-cli
    → supabase link --project-ref $SUPABASE_PROJECT_REF
    → supabase migration list
    → node scripts/ci-supabase-migration-gate.cjs
    → supabase db push   (only if gate = safe)
 
-3. Phase 4 — verification (if Run verification = true)
+3. Phase 4 — verification (always on push; always when Deploy=true on manual dispatch)
    AFTER migrations succeed or are skipped
    → node scripts/phase2b-staging-verify.cjs all
+   (cannot be skipped when deploying)
 
-4. Phase 5 — Cloudflare deploy (if Deploy = true)
-   AFTER verification succeeds or is skipped
+4. Phase 5 — Cloudflare deploy (always on push; optional on manual dispatch)
+   AFTER verification succeeds (required — skipped verification blocks deploy)
    → npm run deploy
      (= OpenNext build
       → wrangler versions upload
@@ -57,15 +85,14 @@ Working rule: run every command from the **repository root**. Do not use older l
 
 CI workflow (`.github/workflows/ci.yml`) runs lint/test/typecheck/build/cf:build on push/PR to `master` and does **not** touch Supabase or deploy.
 
-### Recommended first run inputs
+### Automatic vs manual triggers
 
-| Input | Value |
-| --- | --- |
-| Apply migrations | `true` |
-| Run verification | `true` |
-| Deploy | `true` |
+| Trigger | Migrations | Verification | Deploy |
+| --- | --- | --- | --- |
+| Push to `master` | Always | Always | Always |
+| `workflow_dispatch` | Input (default `false`) | Forced when Deploy=true; else input | Input (default `true`) |
 
-With history already synced, `db push` should be a no-op and still safe.
+With history already synced, automatic `db push` should be a no-op and still safe.
 
 ---
 
@@ -106,7 +133,9 @@ Confirm Environment name is exactly **`staging`** and the workflow is allowed to
 1. **Worker only:** In Cloudflare dashboard (or Wrangler), roll back `bfa-sms-staging` to the previous deployment version. App code reverts; database schema does not.
 2. **Failed `db push`:** Check Actions logs and `supabase migration list`. Do **not** edit already applied migration files. Fix forward with a **new** timestamped migration if schema repair is needed.
 3. **Bad verify after deploy:** Redeploy the previous Worker version; investigate DB/app mismatch offline.
-4. **Emergency stop:** Cancel the in-progress Actions run; concurrency group `deploy-staging` prevents overlapping deploys.
+4. **Emergency stop:** Cancel the in-progress Actions run manually if required. Newer pushes **wait** (they do not cancel an active `production-deploy` run).
+5. **Worker rollback:** Cloudflare Dashboard → `bfa-sms-staging` → Deployments → roll back to previous version.
+6. **Redeploy good commit:** Revert on `master` and push, or run **workflow_dispatch** on a known-good SHA with migrations off (verification still required when Deploy=true).
 
 Tag `v1.0-pre-cicd` marks the pre-automation checkpoint on GitHub.
 
@@ -129,6 +158,6 @@ Tag `v1.0-pre-cicd` marks the pre-automation checkpoint on GitHub.
 2. Never edit or re-paste already applied migrations
 3. From the repository root: `npx supabase db push --dry-run`, then `npx supabase db push` (or enable **Apply migrations** in Deploy staging)
 4. Run verification: `node scripts/phase2b-staging-verify.cjs all`
-5. Deploy: GitHub Actions **Deploy staging** or `npm run deploy` from the repository root with Cloudflare credentials
+5. Deploy: push to `master` (automatic) or **Deploy staging** workflow_dispatch, or `npm run deploy` locally with Cloudflare credentials
 
 Do **not** run `supabase status`, `supabase start`, or `supabase stop` — this project uses the remote linked project only.
