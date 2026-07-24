@@ -65,6 +65,11 @@ Manual deploy: **Actions → Deploy staging → Run workflow** (`workflow_dispat
    → node scripts/ci-supabase-migration-gate.cjs
    → supabase db push   (only if gate = safe)
 
+   Gate outcomes:
+   - exit 0 synced / pending_safe → allow db push
+   - exit 2 reconciliation → block push (empty Remote after successful parse)
+   - exit 3 parse error → block push; do NOT run migration repair
+
 3. Phase 4 — verification (always on push; always when Deploy=true on manual dispatch)
    AFTER migrations succeed or are skipped
    → node scripts/phase2b-staging-verify.cjs all

@@ -118,19 +118,37 @@ jobs:
         id: gate
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          # Prefer the inspected table when present; gate also tries JSON itself.
+          MIGRATION_LIST_FILE: migration-list.txt
         run: |
           set -euo pipefail
           set +e
           node scripts/ci-supabase-migration-gate.cjs
           code=$?
           set -e
+          if [ "$code" -eq 3 ]; then
+            echo "result=parse_error" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Migration list parse error"
+              echo ""
+              echo "\`parsed_rows=0\` — the gate could not parse \`supabase migration list\` output."
+              echo "This is **not** empty remote history and must **not** trigger \`migration repair\`."
+              echo ""
+              echo "Fix the parser / CLI output handling, then re-run. See \`docs/GITHUB_ACTIONS_PIPELINE.md\`."
+              echo ""
+              echo '```'
+              cat migration-list.txt || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 3
+          fi
           if [ "$code" -eq 2 ]; then
             echo "result=reconciliation_required" >> "$GITHUB_OUTPUT"
             {
               echo "## Migration reconciliation required"
               echo ""
-              echo "Remote migration history is not synchronized with \`supabase/migrations\`."
-              echo "This repository historically applied SQL via the Supabase SQL Editor."
+              echo "Remote migration history columns are empty while local SQL migrations exist."
+              echo "This was independently verified from parsed rows — not a parser failure."
               echo ""
               echo "**Do not run \`supabase db push\` yet.**"
               echo ""
@@ -163,7 +181,9 @@ jobs:
         id: outcome
         if: always()
         run: |
-          if [ "${{ steps.gate.outputs.result }}" = "reconciliation_required" ]; then
+          if [ "${{ steps.gate.outputs.result }}" = "parse_error" ]; then
+            echo "result=parse_error" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.gate.outputs.result }}" = "reconciliation_required" ]; then
             echo "result=reconciliation_required" >> "$GITHUB_OUTPUT"
           elif [ "${{ steps.push.outputs.result }}" = "pushed" ]; then
             echo "result=pushed" >> "$GITHUB_OUTPUT"

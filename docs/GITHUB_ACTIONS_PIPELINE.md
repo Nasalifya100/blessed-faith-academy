@@ -148,7 +148,19 @@ supabase link --project-ref qaczvlbgsxcrdcdgsfpo
 supabase migration list
 ```
 
-Or rely on the deploy workflow’s **Migration history gate** (`scripts/ci-supabase-migration-gate.cjs`), which fails with exit code `2` when remote history looks empty while many local files exist.
+Or rely on the deploy workflow’s **Migration history gate** (`scripts/ci-supabase-migration-gate.cjs`).
+
+### Parse failure vs empty history (important)
+
+| Gate status | Meaning | Action |
+|---|---|---|
+| `MIGRATION_LIST_PARSE_ERROR` (`parsed_rows=0`, exit `3`) | CLI output could not be parsed | **Do not** run `migration repair`. Fix the parser / inspect CLI output. |
+| `MIGRATION_RECONCILIATION_REQUIRED` (exit `2`) | Parsed rows exist and **every** Remote column is empty while local SQL files exist | Independently verify history, then repair if needed |
+| `synced` / `pending_safe` (exit `0`) | Histories aligned, or only Local-only pending versions | Safe to `db push` for pending only |
+
+**`parsed_rows=0` must never trigger automatic repair instructions.** Manual `supabase migration repair` is only for independently verified history discrepancies (empty or divergent Remote columns after a successful parse).
+
+The gate prefers `supabase migration list --output-format json` when available, and otherwise parses the human table (backticks, ANSI colours, CRLF, `.gitkeep` skip lines, variable spacing).
 
 ### Exact repair procedure (staging only)
 
@@ -285,8 +297,9 @@ Cancel the run manually in **Actions** if you must stop it. Concurrency group `p
 | CI build fails missing Supabase env | Placeholders missing | CI sets placeholders; check `ci.yml` `env` |
 | Deploy fails Cloudflare auth | Bad/missing token or account id | Check `CLOUDFLARE_*` secrets on Environment `staging` |
 | `supabase link` fails | Wrong password or token | Refresh `SUPABASE_DB_PASSWORD` / `SUPABASE_ACCESS_TOKEN` |
-| Gate exit 2 / reconciliation required | Manual SQL history | Follow § Migration reconciliation |
-| `db push` tries to recreate existing tables | History not repaired | `migration repair --status applied …` |
+| Gate exit 2 / reconciliation required | Parsed empty Remote history | Follow § Migration reconciliation (only after confirming parse succeeded) |
+| Gate exit 3 / `MIGRATION_LIST_PARSE_ERROR` | Parser could not read list output | Fix gate/parser; **never** run `migration repair` for `parsed_rows=0` |
+| `db push` tries to recreate existing tables | History not repaired | `migration repair --status applied …` (only after verified empty/divergent history) |
 | Verify cannot find tables | Migration 303+ not on staging | Apply pending migrations after gate is safe |
 | Verify Auth JWT flakiness | Transient Auth API | Re-run job; script retries some Auth calls |
 | OpenNext Windows issues | Local Windows limits | Use Linux CI (these workflows) or WSL |
@@ -295,7 +308,8 @@ Cancel the run manually in **Actions** if you must stop it. Concurrency group `p
 
 - **`Missing Supabase environment variables`** during build — public `NEXT_PUBLIC_*` not set for that job.  
 - **`Could not find the function … in the schema cache`** — RPC not applied; migrations incomplete.  
-- **`MIGRATION_RECONCILIATION_REQUIRED`** — do not force `db push`.  
+- **`MIGRATION_LIST_PARSE_ERROR`** / `parsed_rows=0` — table/JSON parse failed; **not** empty history; do **not** run `migration repair`.  
+- **`MIGRATION_RECONCILIATION_REQUIRED`** — parsed rows show empty Remote columns while local SQL exists; do not force `db push` until independently verified.  
 - **Wrangler keep-vars** — dashboard secrets remain; forgetting dashboard `SUPABASE_SERVICE_ROLE_KEY` breaks runtime even if CI deploy succeeds.
 
 ---
