@@ -6,6 +6,7 @@ import {
   canManageApplications,
 } from "@/features/auth/permissions";
 import { ROLE_LABELS } from "@/features/auth/types";
+import { canOpenGradebook } from "@/features/gradebook/permissions";
 import {
   DashboardNav,
   type DashboardNavLink,
@@ -113,6 +114,7 @@ export default async function DashboardLayout({
         "bursar",
       ].includes(current.profile.role),
   );
+  const canSeeGradebook = canOpenGradebook(current.profile?.role);
 
   const links: DashboardNavLink[] = [
     { href: "/dashboard", label: "Dashboard" },
@@ -128,6 +130,9 @@ export default async function DashboardLayout({
     ...(canSeeFees ? [{ href: "/dashboard/fees", label: "Fees" }] : []),
     ...(canSeeExaminations
       ? [{ href: "/dashboard/examinations", label: "Examinations" }]
+      : []),
+    ...(canSeeGradebook
+      ? [{ href: "/dashboard/gradebook", label: "Gradebook" }]
       : []),
     ...(canSeeRules ? [{ href: "/dashboard/rules", label: "Rules" }] : []),
     ...(canSeeDiscipline

@@ -248,6 +248,12 @@ jobs:
           node scripts/phase2b-staging-verify.cjs all
           echo "result=passed" >> "$GITHUB_OUTPUT"
 
+      - name: Run Phase 2C gradebook structural verification
+        run: |
+          set -euo pipefail
+          # Post-migration structure only — no behavioural fixtures.
+          node scripts/phase2c-stage1-verify.cjs
+
   deploy:
     name: Phase 5 — Cloudflare deploy
     needs: [verify, migrations, verification]
@@ -347,4 +353,5 @@ jobs:
             echo "(upload version + \`wrangler versions deploy <id>@100% --yes\`)"
             echo ""
             echo "Verification command: \`node scripts/phase2b-staging-verify.cjs all\`"
+            echo "Phase 2C structure: \`node scripts/phase2c-stage1-verify.cjs\`"
           } >> "$GITHUB_STEP_SUMMARY"
