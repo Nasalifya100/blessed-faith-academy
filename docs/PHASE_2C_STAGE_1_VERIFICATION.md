@@ -1,8 +1,20 @@
 # Phase 2C Stage 1 — Verification Notes
 
-**Date:** 2026-07-24 (updated after pre-commit security review)  
+**Date:** 2026-07-24 (updated after verification hotfix)
 **Scope:** Database foundation, capabilities, RPCs, TypeScript contracts  
 **Production mutations from this stage:** None required to validate unit tests  
+
+---
+
+## Verification tiers
+
+| Tier | Mode | Command / trigger | Mutates data? |
+|---|---|---|---|
+| 1. Offline/static | Migration SQL contracts for public RPCs + helpers | `node scripts/phase2c-stage1-verify.cjs --offline` | No |
+| 2. Online public RPC resolution | Correctly shaped PostgREST probes with synthetic UUID | `node scripts/phase2c-stage1-verify.cjs` (CI default) | No (service role hits `auth.uid() IS NULL` before writes) |
+| 3. Optional behavioural smoke | Disposable Auth fixtures | `PHASE2C_SMOKE_FIXTURES=…` or `--require-smoke` | Yes — fixtures only |
+
+CI deploy gate runs **tier 1 + tier 2** only (no fixtures).
 
 ---
 
@@ -23,11 +35,35 @@
 
 ---
 
+## Public RPC structural method
+
+Probe each granted RPC with **exact named parameters** and the fixed synthetic UUID `00000000-0000-4000-8000-0000000000c2` (empty `p_rows` where required).
+
+| Outcome | Result |
+|---|---|
+| Auth required / not-found / unauthorized / validation business error | **PASS** — function resolved |
+| PostgREST reports no matching name+signature (`PGRST202` / could not find with supplied args) | **FAIL** |
+| Schema-cache reload / network transient | **FAIL** (not confirmed presence) |
+| Empty `{}` arity mismatch (“without parameters”) | **Invalid probe** — never used online; classifiers treat it as arity mismatch, not universal absence |
+
+## Internal helper method
+
+Helpers are verified **statically** from migrations (SECURITY DEFINER, `search_path`, revoke/grant text).
+Revoked helpers are **not** treated as missing when PostgREST hides them from anon/authenticated.
+Online: anon client probes confirm EXECUTE is not available (`permission denied` or schema-cache hide).
+`can_read_exam_gradebook` remains granted to `authenticated` (RLS helper) — static grant is checked; anon may not see it.
+
+No `pg_proc` catalogue queries: CI has only the Supabase JS client and no approved generic SQL RPC.
+
+---
+
 ## What can be verified without applying migrations
 
 | Suite | Command | Covers |
 |---|---|---|
-| Permissions + Zod | `npm test` | Least privilege, XOR rules, duplicates, reopen reason, state matrix docs |
+| Permissions + Zod + Stage 2 | `npm test` | Least privilege, XOR rules, entry logic, recovery |
+| Verifier classification | `npm test` (`scripts/phase2c-stage1-verify.test.ts`) | Error taxonomy |
+| Offline structure | `node scripts/phase2c-stage1-verify.cjs --offline` | Migration contracts |
 | Lint / types / build | `npm run lint`, `npx tsc --noEmit`, `npm run build` | Compiles |
 
 ## Post-migration smoke (controlled staging only)
@@ -38,22 +74,7 @@ After CI/`db push` applies the three migrations (never `db reset`):
 node scripts/phase2c-stage1-verify.cjs
 ```
 
-Structure probes only by default. Full behavioural matrix needs disposable Auth fixtures and must assert:
-
-1. Assigned teacher open  
-2. Unassigned rejection  
-3. Duplicate open idempotency (unique conflict path)  
-4. Valid draft save (partial upsert)  
-5. Invalid batch atomic reject (negative / over max / NaN / status+mark)  
-6. Stale revision conflict  
-7. Incomplete submit blocked  
-8. Complete submit + roster_snapshot (+ prune of ineligible draft rows; `pruned_ineligible_count` audited)  
-9. Submitted edit rejected  
-10. Reopen requires capability + reason; LOCKED cannot reopen  
-11. Lock from SUBMITTED only  
-12. Direct DML denied  
-13. Audit events for create/save/submit/reopen/lock  
-14. Cross-class submitted conflict for same exam+student (manual / future fixture)  
+Structure probes only by default. Full behavioural matrix needs disposable Auth fixtures.
 
 Set `PHASE2C_SMOKE_FIXTURES` JSON for the behavioural matrix; without fixtures the probe skips smoke safely.
 
@@ -61,8 +82,6 @@ Do not run against production from an agent session without an explicit ops wind
 
 ---
 
-## Explicitly not run during Stage 1 authoring / this review
+## Incident (2026-07-24)
 
-- `supabase db push` against production from the agent  
-- `supabase db reset` / `migration repair`  
-- Wrangler / `npm run deploy` / push to `master`  
+Empty-argument PostgREST probing (`admin.rpc(name, {})`) falsely failed deploy after migrations applied. See `docs/PHASE_2C_DEPLOYMENT_VERIFICATION_INCIDENT.md`. **Hotfix is code-only — no migrations.**

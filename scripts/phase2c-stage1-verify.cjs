@@ -1,34 +1,183 @@
 /**
- * Phase 2C Stage 1 — schema / RPC presence probes + optional fixture smoke.
+ * Phase 2C Stage 1 — structural verification + optional fixture smoke.
  *
- * Default: read-only structure checks (tables + RPC presence).
- * Optional behavioural matrix: set PHASE2C_SMOKE_FIXTURES to a JSON object
- * with disposable Auth/session fixtures. Without fixtures, smoke is skipped
- * safely (exit 0 after structure probes unless --require-smoke).
+ * Verification tiers:
+ *   1. Offline/static — migration files + RPC/helper SQL contracts
+ *   2. Online public RPC resolution — correctly shaped PostgREST probes
+ *      with synthetic IDs (no fixtures; no mutations under service role)
+ *   3. Optional behavioural smoke — PHASE2C_SMOKE_FIXTURES only
  *
  * Usage:
  *   node scripts/phase2c-stage1-verify.cjs
+ *   node scripts/phase2c-stage1-verify.cjs --offline
  *   node scripts/phase2c-stage1-verify.cjs --require-smoke
  *
- * Requires .env.local with NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
- * Never prints secrets. Do not point at production without an explicit ops window.
+ * Requires .env.local with NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+ * (and ANON key for helper privilege probes). Never prints secrets.
  *
- * Fixture JSON shape (env PHASE2C_SMOKE_FIXTURES):
- * {
- *   "teacherEmail": "...",
- *   "teacherPassword": "...",
- *   "unassignedTeacherEmail": "...",
- *   "unassignedTeacherPassword": "...",
- *   "elevatedEmail": "...",
- *   "elevatedPassword": "...",
- *   "examId": "uuid",
- *   "classId": "uuid",
- *   "studentIds": ["uuid", ...]   // full eligible roster for submit test
- * }
+ * Catalogue (pg_proc) checks are not used: CI only has the Supabase JS client
+ * and there is no approved generic SQL RPC. Public RPCs are probed via
+ * PostgREST; internal helpers are verified statically + privilege denial.
  */
 const fs = require("fs");
 const path = require("path");
 const { createClient } = require("@supabase/supabase-js");
+
+/** Fixed nil UUID for structural probes — never a real production fixture. */
+const SYNTHETIC_UUID = "00000000-0000-4000-8000-0000000000c2";
+
+const PHASE2C_MIGRATIONS = [
+  "20260724140000_exam_gradebook_enums_and_tables.sql",
+  "20260724140100_exam_gradebook_capabilities.sql",
+  "20260724140200_exam_gradebook_rpcs.sql",
+];
+
+/**
+ * Public RPCs granted to authenticated. Probe args match SQL signatures
+ * exactly. Service-role calls hit auth.uid() IS NULL before any mutation.
+ */
+const PUBLIC_RPC_PROBES = [
+  {
+    name: "open_or_get_exam_gradebook",
+    args: { p_exam_id: SYNTHETIC_UUID, p_class_id: SYNTHETIC_UUID },
+  },
+  {
+    name: "get_exam_gradebook",
+    args: { p_gradebook_id: SYNTHETIC_UUID },
+  },
+  {
+    name: "save_exam_gradebook_draft",
+    args: {
+      p_gradebook_id: SYNTHETIC_UUID,
+      p_expected_revision: 1,
+      p_rows: [],
+    },
+  },
+  {
+    name: "submit_exam_gradebook",
+    args: {
+      p_gradebook_id: SYNTHETIC_UUID,
+      p_expected_revision: 1,
+    },
+  },
+  {
+    name: "reopen_exam_gradebook",
+    args: {
+      p_gradebook_id: SYNTHETIC_UUID,
+      p_reason: "phase2c-structural-probe",
+      p_expected_revision: 1,
+    },
+  },
+  {
+    name: "lock_exam_gradebook",
+    args: {
+      p_gradebook_id: SYNTHETIC_UUID,
+      p_expected_revision: 1,
+    },
+  },
+];
+
+/**
+ * Internal helpers (not public Gradebook API). Privilege expectations come
+ * from the applied migrations — do not treat PostgREST absence as "missing"
+ * for revoked helpers.
+ */
+const INTERNAL_HELPERS = [
+  {
+    name: "teacher_assigned_to_exam_class",
+    args: {
+      p_exam_id: SYNTHETIC_UUID,
+      p_class_id: SYNTHETIC_UUID,
+      p_staff_id: SYNTHETIC_UUID,
+    },
+    migrationFile: PHASE2C_MIGRATIONS[0],
+    createNeedle: "create or replace function public.teacher_assigned_to_exam_class",
+    revokeAuthenticated: true,
+    staticNeedles: [
+      "security definer",
+      "set search_path = public",
+      "revoke all on function public.teacher_assigned_to_exam_class(uuid, uuid, uuid) from public",
+      "revoke all on function public.teacher_assigned_to_exam_class(uuid, uuid, uuid) from anon, authenticated",
+    ],
+  },
+  {
+    name: "can_read_exam_gradebook",
+    args: { p_gradebook_id: SYNTHETIC_UUID },
+    migrationFile: PHASE2C_MIGRATIONS[0],
+    createNeedle: "create or replace function public.can_read_exam_gradebook",
+    revokeAuthenticated: false,
+    staticNeedles: [
+      "security definer",
+      "set search_path = public",
+      "revoke all on function public.can_read_exam_gradebook(uuid) from public",
+      "grant execute on function public.can_read_exam_gradebook(uuid) to authenticated",
+    ],
+  },
+  {
+    name: "exam_gradebook_eligible_student_ids",
+    args: { p_exam_id: SYNTHETIC_UUID, p_class_id: SYNTHETIC_UUID },
+    migrationFile: PHASE2C_MIGRATIONS[0],
+    createNeedle: "create or replace function public.exam_gradebook_eligible_student_ids",
+    revokeAuthenticated: true,
+    staticNeedles: [
+      "security definer",
+      "set search_path = public",
+      "revoke all on function public.exam_gradebook_eligible_student_ids(uuid, uuid) from public",
+      "revoke all on function public.exam_gradebook_eligible_student_ids(uuid, uuid) from anon, authenticated",
+    ],
+  },
+  {
+    name: "exam_allows_marks_entry",
+    args: { p_exam_id: SYNTHETIC_UUID },
+    migrationFile: PHASE2C_MIGRATIONS[2],
+    createNeedle: "create or replace function public.exam_allows_marks_entry",
+    revokeAuthenticated: true,
+    staticNeedles: [
+      "security definer",
+      "set search_path = public",
+      "revoke all on function public.exam_allows_marks_entry(uuid) from public",
+      "revoke all on function public.exam_allows_marks_entry(uuid) from anon, authenticated",
+    ],
+  },
+  {
+    name: "can_enter_exam_gradebook",
+    args: { p_exam_id: SYNTHETIC_UUID, p_class_id: SYNTHETIC_UUID },
+    migrationFile: PHASE2C_MIGRATIONS[2],
+    createNeedle: "create or replace function public.can_enter_exam_gradebook",
+    revokeAuthenticated: true,
+    staticNeedles: [
+      "security definer",
+      "set search_path = public",
+      "revoke all on function public.can_enter_exam_gradebook(uuid, uuid) from public",
+      "revoke all on function public.can_enter_exam_gradebook(uuid, uuid) from anon, authenticated",
+    ],
+  },
+  {
+    name: "assert_exam_class_gradebook_scope",
+    args: { p_exam_id: SYNTHETIC_UUID, p_class_id: SYNTHETIC_UUID },
+    migrationFile: PHASE2C_MIGRATIONS[2],
+    createNeedle: "create or replace function public.assert_exam_class_gradebook_scope",
+    revokeAuthenticated: true,
+    staticNeedles: [
+      "security definer",
+      "set search_path = public",
+      "revoke all on function public.assert_exam_class_gradebook_scope(uuid, uuid) from public",
+      "revoke all on function public.assert_exam_class_gradebook_scope(uuid, uuid) from anon, authenticated",
+    ],
+  },
+];
+
+const CLASSIFICATION = {
+  FUNCTION_SIGNATURE_NOT_FOUND: "FUNCTION_SIGNATURE_NOT_FOUND",
+  FUNCTION_RESOLVED_EXPECTED_BUSINESS_ERROR:
+    "FUNCTION_RESOLVED_EXPECTED_BUSINESS_ERROR",
+  PERMISSION_DENIED_EXPECTED_FOR_INTERNAL_HELPER:
+    "PERMISSION_DENIED_EXPECTED_FOR_INTERNAL_HELPER",
+  AUTH_REQUIRED: "AUTH_REQUIRED",
+  SCHEMA_CACHE_OR_TRANSIENT_ERROR: "SCHEMA_CACHE_OR_TRANSIENT_ERROR",
+  UNEXPECTED_ERROR: "UNEXPECTED_ERROR",
+  RESOLVED_OK: "RESOLVED_OK",
+};
 
 function loadEnv(file) {
   const env = {};
@@ -61,6 +210,270 @@ function ok(msg) {
 
 function skip(msg) {
   console.log("SKIP:", msg);
+}
+
+function sanitizeMessage(msg) {
+  return String(msg || "")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
+    .replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9._-]+/g, "[jwt-redacted]")
+    .slice(0, 240);
+}
+
+function argKeyCount(args) {
+  if (args == null) return 0;
+  if (Array.isArray(args)) return args.length;
+  return Object.keys(args).length;
+}
+
+/**
+ * Classify a PostgREST / Supabase RPC probe outcome.
+ * Empty `{}` arity mismatches are NOT proof that every overload is absent.
+ */
+function classifyRpcProbeResult({ name, args, error, code }) {
+  if (!error) {
+    return {
+      kind: CLASSIFICATION.RESOLVED_OK,
+      passAsPublicPresence: true,
+      passAsHelperRevoked: false,
+      detail: "rpc returned without error",
+    };
+  }
+
+  const msg = String(error.message || error || "");
+  const lower = msg.toLowerCase();
+  const errCode = String(code || error.code || error.hint || "");
+  const keys = argKeyCount(args);
+
+  // Empty-object arity mismatch (the Phase 2C deploy false positive).
+  if (
+    keys === 0 &&
+    /could not find the function/i.test(msg) &&
+    /without parameters/i.test(msg)
+  ) {
+    return {
+      kind: CLASSIFICATION.FUNCTION_SIGNATURE_NOT_FOUND,
+      passAsPublicPresence: false,
+      passAsHelperRevoked: false,
+      emptyArgsArityMismatch: true,
+      detail:
+        "empty-argument arity mismatch — not proof the parameterized function is absent",
+    };
+  }
+
+  // Transient / cache reload wording without a definitive missing signature.
+  if (
+    /schema cache.*(reload|stale|outdated|building)/i.test(msg) ||
+    /could not refresh the schema cache/i.test(msg)
+  ) {
+    return {
+      kind: CLASSIFICATION.SCHEMA_CACHE_OR_TRANSIENT_ERROR,
+      passAsPublicPresence: false,
+      passAsHelperRevoked: false,
+      detail: sanitizeMessage(msg),
+    };
+  }
+
+  if (
+    /fetch failed|network|econnreset|etimedout|socket hang up|503|502|429/i.test(
+      msg,
+    )
+  ) {
+    return {
+      kind: CLASSIFICATION.SCHEMA_CACHE_OR_TRANSIENT_ERROR,
+      passAsPublicPresence: false,
+      passAsHelperRevoked: false,
+      detail: sanitizeMessage(msg),
+    };
+  }
+
+  // True absence / wrong signature for the supplied named arguments.
+  if (
+    /could not find the function/i.test(msg) ||
+    /PGRST202/i.test(msg) ||
+    /PGRST202/i.test(errCode) ||
+    (/\b404\b/.test(msg) && /function/i.test(msg))
+  ) {
+    return {
+      kind: CLASSIFICATION.FUNCTION_SIGNATURE_NOT_FOUND,
+      passAsPublicPresence: false,
+      // PostgREST hides non-EXECUTE functions from the role's schema cache.
+      passAsHelperRevoked: true,
+      detail: sanitizeMessage(msg),
+    };
+  }
+
+  if (
+    /permission denied/i.test(msg) ||
+    /not authorized to execute/i.test(msg) ||
+    /PGRST301/i.test(msg) ||
+    /42501/.test(msg)
+  ) {
+    return {
+      kind: CLASSIFICATION.PERMISSION_DENIED_EXPECTED_FOR_INTERNAL_HELPER,
+      passAsPublicPresence: false,
+      passAsHelperRevoked: true,
+      detail: sanitizeMessage(msg),
+    };
+  }
+
+  if (
+    /must be signed in/i.test(msg) ||
+    /not authenticated/i.test(msg) ||
+    (/jwt/i.test(msg) && /required|missing|expired/i.test(msg)) ||
+    /PGRST301/i.test(errCode)
+  ) {
+    return {
+      kind: CLASSIFICATION.AUTH_REQUIRED,
+      passAsPublicPresence: true,
+      passAsHelperRevoked: false,
+      detail: sanitizeMessage(msg),
+    };
+  }
+
+  // Expected business / validation / not-found paths once the function resolved.
+  if (
+    /gradebook not found/i.test(msg) ||
+    /exam not found/i.test(msg) ||
+    /class not found/i.test(msg) ||
+    /no school context/i.test(msg) ||
+    /not authorized/i.test(msg) ||
+    /revision conflict/i.test(msg) ||
+    /invalid/i.test(msg) ||
+    /marks entry is not available/i.test(msg) ||
+    /reason/i.test(msg)
+  ) {
+    return {
+      kind: CLASSIFICATION.FUNCTION_RESOLVED_EXPECTED_BUSINESS_ERROR,
+      passAsPublicPresence: true,
+      passAsHelperRevoked: false,
+      detail: sanitizeMessage(msg),
+    };
+  }
+
+  return {
+    kind: CLASSIFICATION.UNEXPECTED_ERROR,
+    passAsPublicPresence: false,
+    passAsHelperRevoked: false,
+    detail: sanitizeMessage(msg),
+  };
+}
+
+function evaluatePublicRpcClassification(classification) {
+  if (classification.passAsPublicPresence) {
+    return { ok: true, reason: classification.kind };
+  }
+  if (classification.kind === CLASSIFICATION.SCHEMA_CACHE_OR_TRANSIENT_ERROR) {
+    return {
+      ok: false,
+      reason: "transient/schema-cache error is not confirmed presence",
+    };
+  }
+  if (classification.emptyArgsArityMismatch) {
+    return {
+      ok: false,
+      reason: "empty-args probe is invalid for parameterized RPCs",
+    };
+  }
+  if (classification.kind === CLASSIFICATION.FUNCTION_SIGNATURE_NOT_FOUND) {
+    return { ok: false, reason: "no matching public RPC signature" };
+  }
+  return { ok: false, reason: classification.kind };
+}
+
+function evaluateHelperRevocationClassification(classification) {
+  if (classification.passAsHelperRevoked) {
+    return { ok: true, reason: classification.kind };
+  }
+  if (classification.kind === CLASSIFICATION.RESOLVED_OK) {
+    return {
+      ok: false,
+      reason: "internal helper unexpectedly executable by authenticated",
+    };
+  }
+  if (classification.kind === CLASSIFICATION.SCHEMA_CACHE_OR_TRANSIENT_ERROR) {
+    return {
+      ok: false,
+      reason: "transient/schema-cache error is not confirmed revocation",
+    };
+  }
+  return { ok: false, reason: classification.kind };
+}
+
+function defaultProbePayloadsContainOnlySyntheticIds() {
+  const json = JSON.stringify({
+    public: PUBLIC_RPC_PROBES,
+    helpers: INTERNAL_HELPERS.map((h) => ({ name: h.name, args: h.args })),
+  });
+  const uuids = json.match(
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+  );
+  if (!uuids || uuids.length === 0) return false;
+  return uuids.every((u) => u.toLowerCase() === SYNTHETIC_UUID);
+}
+
+function runOfflineChecks() {
+  const migDir = path.join(process.cwd(), "supabase", "migrations");
+  const texts = {};
+
+  for (const file of PHASE2C_MIGRATIONS) {
+    const full = path.join(migDir, file);
+    if (!fs.existsSync(full)) {
+      fail(`missing migration ${file}`);
+      continue;
+    }
+    texts[file] = fs.readFileSync(full, "utf8");
+    ok(`migration present ${file}`);
+  }
+
+  const rpcSql = texts[PHASE2C_MIGRATIONS[2]] || "";
+  for (const probe of PUBLIC_RPC_PROBES) {
+    const needle = `create or replace function public.${probe.name}`;
+    if (!rpcSql.toLowerCase().includes(needle.toLowerCase())) {
+      fail(`RPC migration missing: ${needle}`);
+    } else {
+      ok(`RPC contract text: ${needle}`);
+    }
+  }
+  if (!/p_expected_revision\s+integer/i.test(rpcSql)) {
+    fail("RPC migration missing: p_expected_revision integer");
+  } else {
+    ok("RPC contract text: p_expected_revision integer");
+  }
+
+  console.log("");
+  console.log("Helper static definitions + privilege contracts:");
+  for (const helper of INTERNAL_HELPERS) {
+    const sql = texts[helper.migrationFile] || "";
+    if (!sql.toLowerCase().includes(helper.createNeedle.toLowerCase())) {
+      fail(`helper definition missing: ${helper.createNeedle}`);
+      continue;
+    }
+    let helperOk = true;
+    for (const needle of helper.staticNeedles) {
+      if (!sql.toLowerCase().includes(needle.toLowerCase())) {
+        fail(`helper ${helper.name} missing contract: ${needle}`);
+        helperOk = false;
+      }
+    }
+    if (helperOk) {
+      ok(
+        `helper ${helper.name} static (${
+          helper.revokeAuthenticated
+            ? "EXECUTE revoked from authenticated"
+            : "EXECUTE granted to authenticated"
+        })`,
+      );
+    }
+  }
+
+  if (!defaultProbePayloadsContainOnlySyntheticIds()) {
+    fail("default structural probe payloads must use only SYNTHETIC_UUID");
+  } else {
+    ok("structural probe payloads use synthetic UUID only");
+  }
+
+  console.log("");
+  console.log("Offline Phase 2C structure checks finished (no database).");
 }
 
 async function signIn(url, anonKey, email, password) {
@@ -112,7 +525,6 @@ async function runSmoke(admin, env, fixtures) {
     fixtures.teacherPassword,
   );
 
-  // 1–3: authorised open + idempotency
   const open1 = await teacher.rpc("open_or_get_exam_gradebook", {
     p_exam_id: fixtures.examId,
     p_class_id: fixtures.classId,
@@ -156,7 +568,6 @@ async function runSmoke(admin, env, fixtures) {
     skip("unassigned teacher (fixture absent)");
   }
 
-  // 4: valid draft save (partial upsert — one student)
   const firstStudent = fixtures.studentIds[0];
   const saveOk = await teacher.rpc("save_exam_gradebook_draft", {
     p_gradebook_id: gbId,
@@ -176,7 +587,6 @@ async function runSmoke(admin, env, fixtures) {
   revision = saveOk.data?.revision;
   ok("valid draft save (partial upsert)");
 
-  // 5: invalid batch atomic reject
   const bad = await teacher.rpc("save_exam_gradebook_draft", {
     p_gradebook_id: gbId,
     p_expected_revision: revision,
@@ -191,7 +601,6 @@ async function runSmoke(admin, env, fixtures) {
   if (!bad.error) fail("negative marks should be rejected");
   else ok("atomic invalid batch rejection");
 
-  // 6: stale revision
   const stale = await teacher.rpc("save_exam_gradebook_draft", {
     p_gradebook_id: gbId,
     p_expected_revision: revision - 1,
@@ -208,7 +617,6 @@ async function runSmoke(admin, env, fixtures) {
     ok("stale revision conflict");
   }
 
-  // 7: incomplete submit
   const incomplete = await teacher.rpc("submit_exam_gradebook", {
     p_gradebook_id: gbId,
     p_expected_revision: revision,
@@ -220,7 +628,6 @@ async function runSmoke(admin, env, fixtures) {
     skip("incomplete submit (single-student roster)");
   }
 
-  // Fill remaining roster then submit
   const rows = fixtures.studentIds.map((id, i) =>
     i === 0
       ? { student_id: id, entry_status: "SCORED", marks_obtained: 1 }
@@ -280,7 +687,6 @@ async function runSmoke(admin, env, fixtures) {
     else {
       ok("authorised reopen");
       revision = reopen.data.revision;
-      // resubmit then lock
       const resave = await elevated.rpc("save_exam_gradebook_draft", {
         p_gradebook_id: gbId,
         p_expected_revision: revision,
@@ -318,12 +724,10 @@ async function runSmoke(admin, env, fixtures) {
     skip("reopen/lock (elevated fixture absent)");
   }
 
-  // Direct DML denial as authenticated teacher
   const dml = await teacher.from("exam_gradebooks").update({ revision: 999 }).eq("id", gbId);
   if (!dml.error) fail("direct UPDATE on exam_gradebooks should be denied");
   else ok("direct DML denial");
 
-  // Audit presence (service role)
   const { data: audits, error: auditErr } = await admin
     .from("academic_event_audits")
     .select("event_type")
@@ -342,46 +746,134 @@ async function runSmoke(admin, env, fixtures) {
   ok("smoke matrix finished");
 }
 
+async function runOnlineStructural(admin, env) {
+  console.log("Tier 2 — online tables + public RPC resolution:");
+  const tables = ["exam_gradebooks", "exam_assessment_results"];
+  for (const table of tables) {
+    const { error } = await admin.from(table).select("id").limit(1);
+    if (error) fail(`table ${table}: ${sanitizeMessage(error.message)}`);
+    else ok(`table ${table} readable`);
+  }
+
+  for (const probe of PUBLIC_RPC_PROBES) {
+    const { error, data } = await admin.rpc(probe.name, probe.args);
+    const classification = classifyRpcProbeResult({
+      name: probe.name,
+      args: probe.args,
+      error,
+      code: error?.code,
+    });
+    const verdict = evaluatePublicRpcClassification(classification);
+    if (verdict.ok) {
+      ok(
+        `rpc ${probe.name} resolved (${classification.kind}${
+          data != null ? ", data returned" : ""
+        }: ${classification.detail})`,
+      );
+    } else {
+      fail(
+        `rpc ${probe.name}: ${verdict.reason} [${classification.kind}] ${classification.detail}`,
+      );
+    }
+  }
+
+  console.log("");
+  console.log(
+    "Helper privilege probes (authenticated / anon — not service-role presence):",
+  );
+  const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!anonKey) {
+    fail("NEXT_PUBLIC_SUPABASE_ANON_KEY required for helper privilege probes");
+    return;
+  }
+
+  const anonClient = createClient(env.NEXT_PUBLIC_SUPABASE_URL, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  for (const helper of INTERNAL_HELPERS) {
+    if (!helper.revokeAuthenticated) {
+      // can_read is granted to authenticated; resolve via correctly shaped probe.
+      const { error } = await anonClient.rpc(helper.name, helper.args);
+      const classification = classifyRpcProbeResult({
+        name: helper.name,
+        args: helper.args,
+        error,
+        code: error?.code,
+      });
+      // Anon without JWT may see auth/school errors or still resolve boolean false.
+      if (
+        classification.passAsPublicPresence ||
+        classification.kind === CLASSIFICATION.RESOLVED_OK ||
+        classification.kind ===
+          CLASSIFICATION.FUNCTION_RESOLVED_EXPECTED_BUSINESS_ERROR ||
+        classification.kind === CLASSIFICATION.AUTH_REQUIRED
+      ) {
+        ok(
+          `helper ${helper.name} granted path resolved (${classification.kind})`,
+        );
+      } else if (
+        classification.kind === CLASSIFICATION.FUNCTION_SIGNATURE_NOT_FOUND
+      ) {
+        // Anon may lack EXECUTE even when authenticated has it — static grant
+        // was already checked offline; do not fail the deploy gate solely here.
+        ok(
+          `helper ${helper.name} not exposed to anon (grant is to authenticated; static grant verified offline)`,
+        );
+      } else if (
+        classification.kind === CLASSIFICATION.SCHEMA_CACHE_OR_TRANSIENT_ERROR
+      ) {
+        fail(
+          `helper ${helper.name}: transient error is not confirmed presence [${classification.detail}]`,
+        );
+      } else {
+        fail(
+          `helper ${helper.name}: unexpected [${classification.kind}] ${classification.detail}`,
+        );
+      }
+      continue;
+    }
+
+    const { error } = await anonClient.rpc(helper.name, helper.args);
+    const classification = classifyRpcProbeResult({
+      name: helper.name,
+      args: helper.args,
+      error,
+      code: error?.code,
+    });
+    const verdict = evaluateHelperRevocationClassification(classification);
+    if (verdict.ok) {
+      ok(
+        `helper ${helper.name} not executable by anon/authenticated API (${classification.kind})`,
+      );
+    } else if (
+      classification.kind === CLASSIFICATION.SCHEMA_CACHE_OR_TRANSIENT_ERROR
+    ) {
+      fail(
+        `helper ${helper.name}: transient error is not confirmed revocation [${classification.detail}]`,
+      );
+    } else {
+      fail(
+        `helper ${helper.name}: ${verdict.reason} [${classification.kind}] ${classification.detail}`,
+      );
+    }
+  }
+}
+
 async function main() {
   const requireSmoke = process.argv.includes("--require-smoke");
   const offline = process.argv.includes("--offline");
 
+  console.log("Tier 1 — offline/static structure:");
+  runOfflineChecks();
   if (offline) {
-    const migDir = path.join(process.cwd(), "supabase", "migrations");
-    const required = [
-      "20260724140000_exam_gradebook_enums_and_tables.sql",
-      "20260724140100_exam_gradebook_capabilities.sql",
-      "20260724140200_exam_gradebook_rpcs.sql",
-    ];
-    for (const file of required) {
-      const full = path.join(migDir, file);
-      if (!fs.existsSync(full)) fail(`missing migration ${file}`);
-      else ok(`migration present ${file}`);
-    }
-    const rpcSql = fs.readFileSync(
-      path.join(migDir, required[2]),
-      "utf8",
-    );
-    for (const needle of [
-      "create or replace function public.open_or_get_exam_gradebook",
-      "create or replace function public.get_exam_gradebook",
-      "create or replace function public.save_exam_gradebook_draft",
-      "create or replace function public.submit_exam_gradebook",
-      "p_expected_revision integer",
-      "create or replace function public.reopen_exam_gradebook",
-      "create or replace function public.lock_exam_gradebook",
-    ]) {
-      if (!rpcSql.includes(needle)) fail(`RPC migration missing: ${needle}`);
-      else ok(`RPC contract text: ${needle}`);
-    }
-    console.log("");
-    console.log("Offline Phase 2C structure checks finished (no database).");
     return;
   }
 
+  console.log("");
   const envPath = path.join(process.cwd(), ".env.local");
   if (!fs.existsSync(envPath)) {
-    console.error("Missing .env.local — cannot run Stage 1 probes.");
+    console.error("Missing .env.local — cannot run Stage 1 online probes.");
     process.exit(1);
   }
   const env = loadEnv(envPath);
@@ -396,54 +888,7 @@ async function main() {
     { auth: { persistSession: false, autoRefreshToken: false } },
   );
 
-  const tables = ["exam_gradebooks", "exam_assessment_results"];
-  for (const table of tables) {
-    const { error } = await admin.from(table).select("id").limit(1);
-    if (error) fail(`table ${table}: ${error.message}`);
-    else ok(`table ${table} readable`);
-  }
-
-  const rpcNames = [
-    "open_or_get_exam_gradebook",
-    "get_exam_gradebook",
-    "save_exam_gradebook_draft",
-    "submit_exam_gradebook",
-    "reopen_exam_gradebook",
-    "lock_exam_gradebook",
-  ];
-
-  for (const name of rpcNames) {
-    const { error } = await admin.rpc(name, {});
-    if (!error) {
-      ok(`rpc ${name} callable`);
-      continue;
-    }
-    const msg = error.message || "";
-    if (
-      /could not find the function|PGRST202|404/i.test(msg) ||
-      /schema cache/i.test(msg)
-    ) {
-      fail(`rpc ${name} missing: ${msg}`);
-    } else {
-      ok(`rpc ${name} present (${msg.slice(0, 80)})`);
-    }
-  }
-
-  for (const name of [
-    "teacher_assigned_to_exam_class",
-    "exam_gradebook_eligible_student_ids",
-    "exam_allows_marks_entry",
-    "can_enter_exam_gradebook",
-    "assert_exam_class_gradebook_scope",
-    "can_read_exam_gradebook",
-  ]) {
-    const { error } = await admin.rpc(name, {});
-    if (error && /could not find the function|PGRST202/i.test(error.message || "")) {
-      fail(`helper ${name} missing`);
-    } else {
-      ok(`helper ${name} exists (internal)`);
-    }
-  }
+  await runOnlineStructural(admin, env);
 
   let fixtures = null;
   if (process.env.PHASE2C_SMOKE_FIXTURES) {
@@ -455,6 +900,7 @@ async function main() {
   }
 
   console.log("");
+  console.log("Tier 3 — optional behavioural smoke:");
   if (fixtures && process.exitCode !== 1) {
     console.log("Running optional smoke matrix with fixtures…");
     await runSmoke(admin, env, fixtures);
@@ -474,7 +920,21 @@ async function main() {
   );
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+module.exports = {
+  SYNTHETIC_UUID,
+  PUBLIC_RPC_PROBES,
+  INTERNAL_HELPERS,
+  CLASSIFICATION,
+  classifyRpcProbeResult,
+  evaluatePublicRpcClassification,
+  evaluateHelperRevocationClassification,
+  defaultProbePayloadsContainOnlySyntheticIds,
+  sanitizeMessage,
+};
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

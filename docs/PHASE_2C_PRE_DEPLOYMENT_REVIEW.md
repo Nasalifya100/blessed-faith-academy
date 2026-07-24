@@ -1,8 +1,8 @@
 # Phase 2C — Integrated Pre-Deployment Review
 
-**Date:** 2026-07-24  
+**Date:** 2026-07-24 (updated after verification hotfix)
 **Repository:** `C:\Users\nasa\Documents\GitHub\blessed-faith-academy`  
-**Status:** Review complete. **Not committed / not pushed / migrations not applied.**
+**Status:** Stage 1/2 shipped on `master` (`9fd187d`). Migrations applied. Worker promotion was blocked by a verifier false positive; corrected by a **code-only** verifier hotfix (no migrations).
 
 ---
 
@@ -64,16 +64,25 @@ Actions: capability gates + Zod + RPC. Secretary/bursar: no default nav or marks
 After migrations, deploy workflow runs:
 
 1. `node scripts/phase2b-staging-verify.cjs all`  
-2. `node scripts/phase2c-stage1-verify.cjs` (structure; no fixtures)
+2. `node scripts/phase2c-stage1-verify.cjs` (tiers 1–2; no fixtures)
 
 Offline review mode: `node scripts/phase2c-stage1-verify.cjs --offline`
+
+### Verifier rules (post-hotfix)
+
+- **Do not** probe parameterized RPCs with `{}`. Empty-argument “without parameters” errors are arity mismatches, not proof of absence.
+- Public RPCs: correctly named synthetic-UUID probes; PASS on auth/business errors; FAIL on true signature absence or transient schema-cache errors.
+- Internal helpers: static migration contracts + anon privilege denial; never report revoked helpers as “missing” solely because PostgREST hides them.
+- **No migrations** are required for the verifier hotfix.
+
+See `docs/PHASE_2C_DEPLOYMENT_VERIFICATION_INCIDENT.md`.
 
 ---
 
 ## Tests run
 
-Unit/static: gradebook permissions, stage2 entry/recovery/mappers/contracts, lint, tsc, build.  
-**Not** live DB E2E (migrations unapplied).
+Unit/static: gradebook permissions, stage2 entry/recovery/mappers/contracts, verifier classification, lint, tsc, build.
+Live DB E2E remains optional via fixtures.
 
 ---
 
@@ -88,7 +97,7 @@ See final report section below (17 steps).
 | Scenario | Action |
 |---|---|
 | Migration fails before Worker promote | Fix SQL; no app promote (pipeline blocks) |
-| Deploy fails after migration applied | DB already has tables; fix Worker build; do **not** repair/reset |
+| Deploy fails after migration applied | DB already has tables; fix Worker build / verifier; do **not** repair/reset |
 | UI defect after deploy | Hotfix UI only; DB stays |
 | Destructive SQL defect after apply | Stop traffic; restore from backup / forward-fix migration — **no db reset** |
 
