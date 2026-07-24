@@ -346,10 +346,9 @@ begin
 end;
 $$;
 
-revoke all on function public.can_view_class_results(uuid) from public;
+-- Actual PG signatures include DEFAULT args; GRANT/REVOKE must use full arg lists.
 revoke all on function public.can_view_class_results(uuid, uuid) from public;
 grant execute on function public.can_view_class_results(uuid, uuid) to authenticated;
-grant execute on function public.can_view_class_results(uuid) to authenticated;
 
 create or replace function public.can_view_subject_results(
   p_class_id uuid,
@@ -409,10 +408,8 @@ begin
 end;
 $$;
 
-revoke all on function public.can_view_subject_results(uuid, uuid) from public;
 revoke all on function public.can_view_subject_results(uuid, uuid, uuid) from public;
 grant execute on function public.can_view_subject_results(uuid, uuid, uuid) to authenticated;
-grant execute on function public.can_view_subject_results(uuid, uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RLS: enable + deny direct DML
