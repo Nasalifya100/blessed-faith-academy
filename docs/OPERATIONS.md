@@ -292,7 +292,7 @@ Budget-friendly staging runs on **Cloudflare Workers** via `@opennextjs/cloudfla
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+ (LTS; see `.nvmrc`)
 - Separate **staging** Supabase project (no real student data)
 - All migrations applied on that project in order
 - Public email signup **OFF** in Supabase Auth

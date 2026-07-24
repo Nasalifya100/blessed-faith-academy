@@ -27,12 +27,12 @@ Working rule: run every command from the **repository root**. Do not use older l
 
 ```text
 1. Phase 1 — verify
-   checkout → Node 20 (.nvmrc) → npm ci
+   checkout → Node 22 (.nvmrc) → npm ci
    → npm run lint → npm test → npx tsc --noEmit
    → npm run build → npm run cf:build
 
 2. Phase 2–3 — migrations (if Apply migrations = true)
-   checkout → Node 20 → supabase/setup-cli
+   checkout → Node 22 → supabase/setup-cli
    → supabase link --project-ref $SUPABASE_PROJECT_REF
    → supabase migration list
    → node scripts/ci-supabase-migration-gate.cjs

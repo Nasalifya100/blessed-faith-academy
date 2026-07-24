@@ -27,7 +27,7 @@ This document matches the **actual** repository scripts and deployment path (Ope
 | Phase 2B verification | `node scripts/phase2b-staging-verify.cjs all` |
 | Migration safety gate | `node scripts/ci-supabase-migration-gate.cjs` |
 
-Node version for CI: **20** (see `.nvmrc`; `docs/OPERATIONS.md` requires Node.js 20+).
+Node version for CI: **22** LTS (see `.nvmrc`; `docs/OPERATIONS.md` requires Node.js 22+). Wrangler 4.111+ and current Supabase packages require Node.js >=22.
 
 ---
 
