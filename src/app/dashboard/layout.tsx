@@ -7,6 +7,7 @@ import {
 } from "@/features/auth/permissions";
 import { ROLE_LABELS } from "@/features/auth/types";
 import { canOpenGradebook } from "@/features/gradebook/permissions";
+import { canOpenReportCards } from "@/features/report-cards/permissions";
 import { canOpenResults } from "@/features/results/permissions";
 import {
   DashboardNav,
@@ -117,6 +118,7 @@ export default async function DashboardLayout({
   );
   const canSeeGradebook = canOpenGradebook(current.profile?.role);
   const canSeeResults = canOpenResults(current.profile?.role);
+  const canSeeReportCards = canOpenReportCards(current.profile?.role);
 
   const links: DashboardNavLink[] = [
     { href: "/dashboard", label: "Dashboard" },
@@ -138,6 +140,9 @@ export default async function DashboardLayout({
       : []),
     ...(canSeeResults
       ? [{ href: "/dashboard/results", label: "Results" }]
+      : []),
+    ...(canSeeReportCards
+      ? [{ href: "/dashboard/report-cards", label: "Report Cards" }]
       : []),
     ...(canSeeRules ? [{ href: "/dashboard/rules", label: "Rules" }] : []),
     ...(canSeeDiscipline
