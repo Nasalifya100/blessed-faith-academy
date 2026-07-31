@@ -112,6 +112,13 @@ describe("deployment metadata", () => {
     expect(meta.workerName).toBeTruthy();
     expect(meta.environmentName).toBeTruthy();
   });
+
+  it("prefers generated build info when present", async () => {
+    const { BUILD_INFO } = await import("@/lib/ops/build-info.generated");
+    expect(BUILD_INFO).toHaveProperty("gitSha");
+    expect(BUILD_INFO).toHaveProperty("workerName");
+    expect(JSON.stringify(BUILD_INFO)).not.toMatch(/service_role|eyJhbGci/i);
+  });
 });
 
 describe("rate limiting", () => {

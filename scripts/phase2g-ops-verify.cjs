@@ -18,6 +18,8 @@ const required = [
   "src/lib/ops/upload-policy.ts",
   "scripts/production-preflight.cjs",
   "scripts/operational-integrity-verify.cjs",
+  "scripts/write-build-info.cjs",
+  "src/lib/ops/build-info.generated.ts",
   "docs/PHASE_2G_OPERATIONAL_HARDENING_PLAN.md",
   "docs/PHASE_2G_SECURITY_REVIEW.md",
   "docs/PHASE_2G_BACKUP_AND_RESTORE.md",

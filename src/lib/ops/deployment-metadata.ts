@@ -1,7 +1,12 @@
 /**
  * Safe deployment / build identity for support incidents.
  * Never includes secrets.
+ *
+ * Prefers compile-time BUILD_INFO (generated before OpenNext build) because
+ * Cloudflare Worker runtime does not reliably expose CI NEXT_PUBLIC_* vars.
  */
+
+import { BUILD_INFO } from "@/lib/ops/build-info.generated";
 
 export type DeploymentMetadata = {
   applicationVersion: string;
@@ -20,29 +25,50 @@ function readEnv(name: string): string | undefined {
   return value.trim();
 }
 
+function prefer(
+  generated: string | undefined,
+  ...envNames: string[]
+): string | undefined {
+  if (generated && generated !== "unknown" && generated !== "local") {
+    return generated;
+  }
+  for (const name of envNames) {
+    const value = readEnv(name);
+    if (value) return value;
+  }
+  if (generated && generated.trim()) return generated;
+  return undefined;
+}
+
 export function getDeploymentMetadata(): DeploymentMetadata {
   const gitSha =
-    readEnv("NEXT_PUBLIC_GIT_SHA") ??
-    readEnv("GITHUB_SHA") ??
-    readEnv("CF_PAGES_COMMIT_SHA") ??
-    "unknown";
+    prefer(
+      BUILD_INFO.gitSha,
+      "NEXT_PUBLIC_GIT_SHA",
+      "GITHUB_SHA",
+      "CF_PAGES_COMMIT_SHA",
+    ) ?? "unknown";
 
   const buildTimestamp =
-    readEnv("NEXT_PUBLIC_BUILD_TIMESTAMP") ??
-    readEnv("BUILD_TIMESTAMP") ??
-    "unknown";
+    prefer(
+      BUILD_INFO.buildTimestamp,
+      "NEXT_PUBLIC_BUILD_TIMESTAMP",
+      "BUILD_TIMESTAMP",
+    ) ?? "unknown";
 
   const environmentName =
-    readEnv("NEXT_PUBLIC_DEPLOY_ENV") ??
-    readEnv("DEPLOY_ENV") ??
+    prefer(BUILD_INFO.environmentName, "NEXT_PUBLIC_DEPLOY_ENV", "DEPLOY_ENV") ??
     "effective-production";
 
   const applicationVersion =
-    readEnv("NEXT_PUBLIC_APP_VERSION") ??
-    readEnv("npm_package_version") ??
-    "0.1.0";
+    prefer(
+      BUILD_INFO.applicationVersion,
+      "NEXT_PUBLIC_APP_VERSION",
+      "npm_package_version",
+    ) ?? "0.1.0";
 
-  const workerName = readEnv("NEXT_PUBLIC_WORKER_NAME") ?? DEFAULT_WORKER;
+  const workerName =
+    prefer(BUILD_INFO.workerName, "NEXT_PUBLIC_WORKER_NAME") ?? DEFAULT_WORKER;
 
   return {
     applicationVersion,

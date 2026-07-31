@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
-    "cf:build": "opennextjs-cloudflare build",
+    "build": "node scripts/write-build-info.cjs && next build --webpack",
+    "cf:build": "node scripts/write-build-info.cjs && opennextjs-cloudflare build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
@@ -13,9 +13,9 @@
     "preflight": "node scripts/production-preflight.cjs --offline",
     "integrity:offline": "node scripts/operational-integrity-verify.cjs --offline",
     "phase2g:verify": "node scripts/phase2g-ops-verify.cjs",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && node scripts/cf-upload-and-promote.cjs",
-    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload -- --keep-vars",
+    "preview": "node scripts/write-build-info.cjs && opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "node scripts/write-build-info.cjs && opennextjs-cloudflare build && node scripts/cf-upload-and-promote.cjs",
+    "upload": "node scripts/write-build-info.cjs && opennextjs-cloudflare build && opennextjs-cloudflare upload -- --keep-vars",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
