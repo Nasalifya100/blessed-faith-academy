@@ -11,6 +11,15 @@ import {
 } from "@/lib/site-url";
 import { adminSendPasswordResetSchema } from "@/features/auth/password-reset-schemas";
 import { ACCOUNT_NOT_ACTIVATED_MESSAGE } from "@/features/auth/password-recovery";
+import {
+  formatOpsErrorForUser,
+  normalizeOpsError,
+} from "@/lib/ops/errors";
+import { createCorrelationId, logOpsEvent } from "@/lib/ops/logger";
+import {
+  checkRateLimit,
+  RATE_LIMIT_PROFILES,
+} from "@/lib/ops/rate-limit";
 
 const SESSION_ERROR = "Your session has expired. Please sign in again.";
 const CONNECTION_ERROR =
@@ -103,6 +112,41 @@ export async function adminSendPasswordResetAction(
     return {
       error: parsed.error.issues[0]?.message ?? "Invalid staff account.",
     };
+  }
+
+  const correlationId = createCorrelationId();
+  const rate = checkRateLimit({
+    key: `password-reset:${current.id}`,
+    limit: RATE_LIMIT_PROFILES.passwordReset.limit,
+    windowMs: RATE_LIMIT_PROFILES.passwordReset.windowMs,
+  });
+  if (!rate.allowed) {
+    const normalized = normalizeOpsError("rate limited", {
+      category: "RATE_LIMITED",
+    });
+    logOpsEvent({
+      severity: "warn",
+      correlationId,
+      action: "admin_password_reset",
+      module: "auth",
+      outcome: "denied",
+      actorId: current.id,
+      schoolId: current.profile?.school_id ?? undefined,
+      errorCategory: "RATE_LIMITED",
+      meta: { retryAfterSeconds: rate.retryAfterSeconds, store: rate.store },
+    });
+    return { error: formatOpsErrorForUser(normalized) };
+  }
+  if (rate.store === "unavailable") {
+    logOpsEvent({
+      severity: "warn",
+      correlationId,
+      action: "admin_password_reset_rate_limit_store",
+      module: "auth",
+      outcome: "skipped",
+      actorId: current.id,
+      message: "Rate-limit store unavailable; fail-open",
+    });
   }
 
   const staffId = parsed.data.staffId;

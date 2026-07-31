@@ -195,6 +195,44 @@ export default async function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
+              <p className="text-sm font-medium">System health</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Deployment identity, database readiness, audit and report-card
+                structural checks. Public shallow check:{" "}
+                <code className="rounded bg-muted px-1 py-0.5">/api/health</code>
+                .
+              </p>
+            </div>
+            <Link
+              href="/dashboard/settings/system-health"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "min-h-11 shrink-0",
+              )}
+            >
+              Open system health
+            </Link>
+          </div>
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Audit log</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Read-only academic, finance, report-card, and password-reset
+                events. Records cannot be edited or deleted.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/settings/audit-log"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "min-h-11 shrink-0",
+              )}
+            >
+              Open audit log
+            </Link>
+          </div>
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1">
               <p className="text-sm font-medium">Finance migration readiness</p>
               <p className="max-w-xl text-sm text-muted-foreground">
                 Administrator-only checklist for Phase 2 payment allocations.

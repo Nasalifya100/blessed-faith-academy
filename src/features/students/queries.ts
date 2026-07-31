@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { clampListLimit, MAX_LIST_ROWS } from "@/lib/ops/pagination";
 
 export interface ClassOption {
   id: string;
@@ -131,13 +132,18 @@ export async function listStudents(
     .eq("is_current", true)
     .maybeSingle();
 
+  // Hard cap protects Workers memory on unexpectedly large directories.
+  // UI still client-paginates; filters should keep working sets small.
+  const listCap = clampListLimit(MAX_LIST_ROWS);
+
   let query = supabase
     .from("students")
     .select(
       "id, admission_number, first_name, middle_name, last_name, gender, status",
     )
     .order("last_name", { ascending: true })
-    .order("first_name", { ascending: true });
+    .order("first_name", { ascending: true })
+    .limit(listCap);
 
   const search = filters.q?.replace(/[%,]/g, " ").trim();
   if (search) {

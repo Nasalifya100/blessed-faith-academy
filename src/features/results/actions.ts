@@ -17,6 +17,12 @@ import type {
 } from "@/features/results/types";
 import { RESULTS_ENGINE_VERSION } from "@/features/results/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  formatOpsErrorForUser,
+  normalizeOpsError,
+} from "@/lib/ops/errors";
+import { checkRateLimit, RATE_LIMIT_PROFILES } from "@/lib/ops/rate-limit";
+import { createCorrelationId, logOpsEvent } from "@/lib/ops/logger";
 
 export type ActionResult =
   | { ok: true; message: string; batchId?: string }
@@ -239,6 +245,28 @@ export async function recalculateClassTermAction(
   if (!current?.profile) return { ok: false, error: "Not signed in." };
   if (!canRecalculateResults(current.profile.role)) {
     return { ok: false, error: "Not authorized to recalculate results." };
+  }
+
+  const rate = checkRateLimit({
+    key: `result-recalc:${current.id}`,
+    limit: RATE_LIMIT_PROFILES.resultRecalc.limit,
+    windowMs: RATE_LIMIT_PROFILES.resultRecalc.windowMs,
+  });
+  if (!rate.allowed) {
+    const normalized = normalizeOpsError("rate limited", {
+      category: "RATE_LIMITED",
+    });
+    logOpsEvent({
+      severity: "warn",
+      correlationId: createCorrelationId(),
+      action: "recalculate_class_term",
+      module: "results",
+      outcome: "denied",
+      actorId: current.id,
+      schoolId: current.profile.school_id ?? undefined,
+      errorCategory: "RATE_LIMITED",
+    });
+    return { ok: false, error: formatOpsErrorForUser(normalized) };
   }
 
   const parsed = recalculateClassTermSchema.safeParse(raw);

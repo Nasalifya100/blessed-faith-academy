@@ -33,6 +33,12 @@ import type {
 import { REPORT_CARD_TEMPLATE_VERSION } from "@/features/report-cards/types";
 import { RESULTS_ENGINE_VERSION } from "@/features/results/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  formatOpsErrorForUser,
+  normalizeOpsError,
+} from "@/lib/ops/errors";
+import { createCorrelationId, logOpsEvent } from "@/lib/ops/logger";
+import { checkRateLimit, RATE_LIMIT_PROFILES } from "@/lib/ops/rate-limit";
 
 export type ActionResult =
   | { ok: true; message: string; details?: Record<string, number> }
@@ -98,6 +104,28 @@ export async function generateClassReportCardDraftsAction(
   if (!current?.profile) return { ok: false, error: "Not signed in." };
   if (!canOpenReportCards(current.profile.role)) {
     return { ok: false, error: "Not authorized." };
+  }
+
+  const rate = checkRateLimit({
+    key: `report-bulk:${current.id}`,
+    limit: RATE_LIMIT_PROFILES.reportCardBulk.limit,
+    windowMs: RATE_LIMIT_PROFILES.reportCardBulk.windowMs,
+  });
+  if (!rate.allowed) {
+    const normalized = normalizeOpsError("rate limited", {
+      category: "RATE_LIMITED",
+    });
+    logOpsEvent({
+      severity: "warn",
+      correlationId: createCorrelationId(),
+      action: "generate_class_report_card_drafts",
+      module: "report-cards",
+      outcome: "denied",
+      actorId: current.id,
+      schoolId: current.profile.school_id ?? undefined,
+      errorCategory: "RATE_LIMITED",
+    });
+    return { ok: false, error: formatOpsErrorForUser(normalized) };
   }
 
   const parsed = generateClassDraftsSchema.safeParse(raw);
