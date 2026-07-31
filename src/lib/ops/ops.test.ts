@@ -145,6 +145,19 @@ describe("rate limiting", () => {
   });
 });
 
+describe("public health OpenNext compatibility", () => {
+  it("does not declare unsupported per-route edge runtime", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/health/route.ts"),
+      "utf8",
+    );
+    expect(source).not.toMatch(/runtime\s*=\s*["']edge["']/);
+    expect(source).toMatch(/dynamic\s*=\s*["']force-dynamic["']/);
+  });
+});
+
 describe("pagination bounds", () => {
   it("normalizes page and clamps page size", () => {
     expect(normalizePageParams({ page: 0, pageSize: 999 })).toEqual({

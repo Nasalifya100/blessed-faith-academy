@@ -4,7 +4,8 @@ import { getPublicDeploymentSummary } from "@/lib/ops/deployment-metadata";
 import { isPublicHealthSafe } from "@/lib/ops/health-status";
 import { createCorrelationId, logOpsEvent } from "@/lib/ops/logger";
 
-export const runtime = "edge";
+// OpenNext on Cloudflare Workers does not support per-route edge runtime for
+// app router handlers. Use the default Worker-compatible server runtime.
 export const dynamic = "force-dynamic";
 
 /**
