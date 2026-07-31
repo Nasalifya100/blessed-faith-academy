@@ -33,17 +33,33 @@ export function ResultsDashboard(props: {
             Academic Results
           </h1>
           <p className="text-sm text-muted-foreground">
-            Calculated from submitted gradebooks using the school grading scheme.
-            Report cards and publishing are Phase 2D.2.
+            Calculate class results from submitted gradebooks using the school
+            grading scheme. After results are current, continue to Report Cards.
           </p>
         </div>
-        {hub.canRecalculate && filters.classId ? (
-          <RecalculateResultsButton
-            academicYearId={filters.academicYearId}
-            termId={filters.termId}
-            classId={filters.classId}
-          />
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {hub.canRecalculate && filters.classId ? (
+            <RecalculateResultsButton
+              academicYearId={filters.academicYearId}
+              termId={filters.termId}
+              classId={filters.classId}
+            />
+          ) : null}
+          {filters.classId ? (
+            <Link
+              href={`/dashboard/report-cards?academic_year_id=${filters.academicYearId}&term_id=${filters.termId}&class_id=${filters.classId}`}
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Report cards
+            </Link>
+          ) : null}
+          <Link
+            href={`/dashboard/gradebook?year=${filters.academicYearId}&term=${filters.termId}${filters.classId ? `&class=${filters.classId}` : ""}`}
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Marks
+          </Link>
+        </div>
       </div>
 
       <form className={filterPanelClassName()} method="get">
@@ -123,9 +139,9 @@ export function ResultsDashboard(props: {
               role="status"
               className="rounded-xl border border-amber-700/30 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-50"
             >
-              These results may be outdated (source gradebooks changed, were
-              reopened, or the calculation engine version changed). Recalculate
-              to refresh authoritative snapshots.
+              Marks changed after these results were calculated, or a gradebook
+              was reopened. Calculate the results again before generating report
+              cards.
             </div>
           ) : null}
 
@@ -242,7 +258,7 @@ export function ResultsDashboard(props: {
                         colSpan={6}
                         className="px-3 py-6 text-muted-foreground"
                       >
-                        No subject snapshots for this filter.
+                        No subject results for this filter.
                       </td>
                     </tr>
                   ) : (

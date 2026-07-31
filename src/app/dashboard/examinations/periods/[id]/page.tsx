@@ -139,7 +139,20 @@ export default async function ExamPeriodDetailPage({
               : "○"}{" "}
             Mark exams as ready
           </li>
-          <li>○ Print timetable</li>
+          <li>
+            {exams.some((e) => e.status === "COMPLETED") ? "✓" : "○"} Mark exams
+            completed (required before marks entry)
+          </li>
+          <li>
+            Use{" "}
+            <Link
+              href={`/dashboard/examinations/print?period=${id}`}
+              className="underline"
+            >
+              Print timetable
+            </Link>{" "}
+            when the schedule is ready
+          </li>
         </ul>
       </section>
 

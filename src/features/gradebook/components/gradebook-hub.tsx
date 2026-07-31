@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import {
+  resultsHref,
+} from "@/features/examinations/context-links";
 import type { GradebookHubContext } from "@/features/gradebook/queries";
 import { GradebookStatusBadge } from "@/features/gradebook/components/gradebook-status-badge";
 import { OpenGradebookButton } from "@/features/gradebook/components/open-gradebook-button";
@@ -229,12 +232,30 @@ export function GradebookHubView({
         title="Gradebook"
         description="Enter and submit exam marks for your assigned classes. Marks stay private until you submit."
         actions={
-          <Link
-            href="/dashboard/examinations"
-            className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
-          >
-            Examinations
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/dashboard/examinations"
+              className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
+            >
+              Examinations
+            </Link>
+            <Link
+              href={resultsHref({
+                academicYearId: filters.year ?? hub.activeYearId,
+                termId:
+                  filters.term && filters.term !== "all"
+                    ? filters.term
+                    : hub.activeTermId,
+                classId:
+                  filters.classId && filters.classId !== "all"
+                    ? filters.classId
+                    : null,
+              })}
+              className={cn(buttonVariants({ variant: "outline" }), "min-h-11")}
+            >
+              Results
+            </Link>
+          </div>
         }
       />
 

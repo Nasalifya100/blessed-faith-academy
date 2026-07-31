@@ -7,14 +7,14 @@ export const EXAM_PERIOD_STATUSES = [
   "ARCHIVED",
 ] as const;
 
-/** Period CLOSED is shown to staff as Completed. */
+/** Period CLOSED = sitting finished (distinct from exam lifecycle Completed). */
 export const EXAM_PERIOD_STATUS_LABELS: Record<
   (typeof EXAM_PERIOD_STATUSES)[number],
   string
 > = {
   DRAFT: "Draft",
   OPEN: "Open",
-  CLOSED: "Completed",
+  CLOSED: "Closed",
   ARCHIVED: "Archived",
 };
 

@@ -31,7 +31,7 @@ export default async function ReportCardSettingsPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             Configure the official template defaults. Academic values always
-            come from Phase 2D.1 result snapshots.
+            come from calculated class results.
           </p>
         </div>
         <Link

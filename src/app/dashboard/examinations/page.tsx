@@ -6,11 +6,12 @@ import {
   canManageExamSetup,
   canOpenExaminations,
 } from "@/features/examinations/permissions";
-import { listExamPeriods } from "@/features/examinations/queries";
 import {
-  ArchiveClosedButton,
-  PrintLink,
-} from "@/features/examinations/components/exam-setup-forms";
+  getExaminationCommandCentre,
+  listExamPeriods,
+} from "@/features/examinations/queries";
+import { ExaminationCommandCentrePanel } from "@/features/examinations/components/examination-command-centre";
+import { ArchiveClosedButton } from "@/features/examinations/components/exam-setup-forms";
 import { EXAM_PERIOD_STATUS_LABELS } from "@/features/examinations/schemas";
 import {
   BackLink,
@@ -27,58 +28,48 @@ export default async function ExaminationsHomePage() {
   }
 
   const canManage = canManageExamSetup(current.profile.role);
-  const periods = await listExamPeriods();
+  const [centre, periods] = await Promise.all([
+    getExaminationCommandCentre(),
+    listExamPeriods(),
+  ]);
+
+  const visiblePeriods = periods.filter((p) => p.status !== "ARCHIVED");
+  const archivedCount = periods.length - visiblePeriods.length;
 
   return (
     <PageShell>
       <BackLink href="/dashboard">Dashboard</BackLink>
       <PageHeader
         title="Examinations"
-        description="Prepare exam periods, schedules, rooms and invigilators. Marks entry comes later."
+        description="Command Centre for setup, marks, results, and report cards — guidance summaries never replace server checks."
       />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <Link
-          href="/dashboard/examinations/upcoming"
-          className={cn(buttonVariants(), "h-11")}
-        >
-          Upcoming exams
-        </Link>
-        {canManage ? (
-          <>
-            <Link
-              href="/dashboard/examinations/periods/new"
-              className={cn(buttonVariants(), "h-11")}
-            >
-              Create exam period
-            </Link>
-            <Link
-              href="/dashboard/examinations/rooms"
-              className={cn(buttonVariants({ variant: "outline" }), "h-11")}
-            >
-              Rooms
-            </Link>
-            <PrintLink
-              href="/dashboard/examinations/print"
-              label="Print timetables"
-            />
-          </>
-        ) : null}
-      </div>
+      {centre ? <ExaminationCommandCentrePanel centre={centre} /> : null}
 
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Exam periods</h2>
-        {periods.length === 0 ? (
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <h2 className="text-lg font-semibold">Exam periods</h2>
+          {archivedCount > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {archivedCount} archived period
+              {archivedCount === 1 ? "" : "s"} hidden from this list
+            </p>
+          ) : null}
+        </div>
+        {visiblePeriods.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No exam periods yet.
+            No active exam periods yet.
             {canManage
               ? " Create one to start scheduling examinations."
               : " An administrator will set these up."}
           </p>
         ) : (
           <ul className="divide-y rounded-md border">
-            {periods.map((period) => (
-              <li key={period.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+            {visiblePeriods.map((period) => (
+              <li
+                key={period.id}
+                className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div className="min-w-0 space-y-1">
                   <Link
                     href={`/dashboard/examinations/periods/${period.id}`}
@@ -95,15 +86,26 @@ export default async function ExaminationsHomePage() {
                     {period.exam_count ?? 0} exams
                   </p>
                 </div>
-                <Link
-                  href={`/dashboard/examinations/periods/${period.id}/schedule`}
-                  className={cn(
-                    buttonVariants({ variant: "outline" }),
-                    "h-11 shrink-0",
-                  )}
-                >
-                  Exam schedule
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/dashboard/examinations/periods/${period.id}`}
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "h-11 shrink-0",
+                    )}
+                  >
+                    Setup
+                  </Link>
+                  <Link
+                    href={`/dashboard/examinations/periods/${period.id}/schedule`}
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "h-11 shrink-0",
+                    )}
+                  >
+                    Schedule
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>
@@ -113,6 +115,10 @@ export default async function ExaminationsHomePage() {
       {canManage ? (
         <section className="space-y-2 border-t pt-6">
           <h2 className="text-base font-semibold">Bulk actions</h2>
+          <p className="text-sm text-muted-foreground">
+            Archive closed periods only after marks and report cards for that
+            sitting are finished.
+          </p>
           <ArchiveClosedButton />
         </section>
       ) : null}

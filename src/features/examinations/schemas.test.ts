@@ -68,8 +68,8 @@ describe("exam lifecycle schema", () => {
     expect(bad.success).toBe(false);
   });
 
-  it("maps period CLOSED to Completed for staff labels", () => {
-    expect(EXAM_PERIOD_STATUS_LABELS.CLOSED).toBe("Completed");
+  it("maps period CLOSED to Closed for staff labels", () => {
+    expect(EXAM_PERIOD_STATUS_LABELS.CLOSED).toBe("Closed");
   });
 });
 

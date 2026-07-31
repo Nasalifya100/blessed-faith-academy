@@ -439,3 +439,501 @@ export async function getSchoolBrandForPrint(): Promise<{
     phone: string | null;
   } | null) ?? null;
 }
+
+/**
+ * Bounded role-aware examinations overview for /dashboard/examinations.
+ * Counts only — no student names or marks.
+ */
+export async function getExaminationsOverview(): Promise<
+  import("./overview").ExaminationsOverviewModel | null
+> {
+  const current = await requireExamViewer();
+  if (!current?.profile) return null;
+
+  const { canManageExamSetup } = await import(
+    "@/features/examinations/permissions"
+  );
+  const { canOpenGradebook, hasGradebookCapability } = await import(
+    "@/features/gradebook/permissions"
+  );
+  const { canOpenResults, canRecalculateResults } = await import(
+    "@/features/results/permissions"
+  );
+  const {
+    canOpenReportCards,
+    canApproveReportCards,
+    canPublishReportCards,
+    canEditReportCardRemarks,
+  } = await import("@/features/report-cards/permissions");
+  const {
+    buildOverviewNextActions,
+    inferProgressStage,
+  } = await import("@/features/examinations/overview");
+  const {
+    gradebookHref,
+    resultsHref,
+    reportCardsHref,
+    examSettingsHref,
+  } = await import("@/features/examinations/context-links");
+
+  const role = current.profile.role;
+  const manage = canManageExamSetup(role);
+  const openGb = canOpenGradebook(role);
+  const viewAllGb = hasGradebookCapability(role, "GRADEBOOK_VIEW_ALL");
+  const openRes = canOpenResults(role);
+  const canRecalc = canRecalculateResults(role);
+  const openRc = canOpenReportCards(role);
+  const canApproveOrPublish =
+    canApproveReportCards(role) || canPublishReportCards(role);
+  const canEditRemarks = canEditReportCardRemarks(role);
+
+  const supabase = await createSupabaseServerClient();
+
+  const [{ data: yearRow }, { data: termRow }] = await Promise.all([
+    supabase
+      .from("academic_years")
+      .select("id, name")
+      .eq("is_current", true)
+      .maybeSingle(),
+    supabase
+      .from("terms")
+      .select("id, name, academic_year_id")
+      .eq("is_current", true)
+      .maybeSingle(),
+  ]);
+
+  const academicYearId = (yearRow as { id: string; name: string } | null)?.id ?? null;
+  const academicYearName =
+    (yearRow as { id: string; name: string } | null)?.name ?? null;
+  let termId = (termRow as { id: string; name: string; academic_year_id: string } | null)
+    ?.id ?? null;
+  let termName =
+    (termRow as { id: string; name: string; academic_year_id: string } | null)
+      ?.name ?? null;
+
+  if (
+    termRow &&
+    academicYearId &&
+    (termRow as { academic_year_id: string }).academic_year_id !== academicYearId
+  ) {
+    termId = null;
+    termName = null;
+  }
+
+  let periodQuery = supabase
+    .from("exam_periods")
+    .select("id, name, status, academic_year_id, term_id")
+    .neq("status", "ARCHIVED")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (academicYearId) periodQuery = periodQuery.eq("academic_year_id", academicYearId);
+  if (termId) periodQuery = periodQuery.eq("term_id", termId);
+
+  const { data: periods } = await periodQuery;
+  const periodList =
+    (periods as Array<{
+      id: string;
+      name: string;
+      status: string;
+      academic_year_id: string;
+      term_id: string | null;
+    }> | null) ?? [];
+  const activePeriod = periodList.find((p) => p.status === "OPEN") ?? periodList[0] ?? null;
+
+  const periodIds = periodList.map((p) => p.id);
+  let examsTotal = 0;
+  let examsCompleted = 0;
+  let examsReady = 0;
+  let examRows: Array<{ id: string; status: string }> = [];
+  if (periodIds.length > 0) {
+    const { data } = await supabase
+      .from("exams")
+      .select("id, status, exam_period_id")
+      .in("exam_period_id", periodIds)
+      .limit(500);
+    examRows = (data as Array<{ id: string; status: string }> | null) ?? [];
+    examsTotal = examRows.length;
+    examsCompleted = examRows.filter((e) => e.status === "COMPLETED").length;
+    examsReady = examRows.filter((e) => e.status === "READY").length;
+  }
+
+  const emptyCounts = {
+    examPeriodsActive: periodList.length,
+    examsTotal,
+    examsCompleted,
+    examsReady,
+    gradebooksNotStarted: 0,
+    gradebooksDraft: 0,
+    gradebooksReopened: 0,
+    gradebooksSubmitted: 0,
+    gradebooksLocked: 0,
+    resultsClassesReady: 0,
+    resultsClassesStale: 0,
+    reportCardsDraft: 0,
+    reportCardsReviewed: 0,
+    reportCardsApproved: 0,
+    reportCardsPublished: 0,
+  };
+
+  // Gradebook / results / report-card counts only for roles that can open those modules.
+  if ((openGb || openRes || openRc) && examRows.length > 0) {
+    const examIds = examRows.map((e) => e.id);
+    const completedExamIds = examRows
+      .filter((e) => e.status === "COMPLETED")
+      .map((e) => e.id);
+
+    const { data: gbRows } = await supabase
+      .from("exam_gradebooks")
+      .select("id, status, exam_id")
+      .in("exam_id", examIds)
+      .limit(400);
+    const gradebooks =
+      (gbRows as Array<{ status: string; exam_id: string }> | null) ?? [];
+    emptyCounts.gradebooksDraft = gradebooks.filter(
+      (g) => g.status === "DRAFT",
+    ).length;
+    emptyCounts.gradebooksReopened = gradebooks.filter(
+      (g) => g.status === "REOPENED",
+    ).length;
+    emptyCounts.gradebooksSubmitted = gradebooks.filter(
+      (g) => g.status === "SUBMITTED",
+    ).length;
+    emptyCounts.gradebooksLocked = gradebooks.filter(
+      (g) => g.status === "LOCKED",
+    ).length;
+    // Exam-level “not started” is only safe for school-wide viewers.
+    // Teachers see exam×class gradebooks; one class starting must not hide others.
+    if (viewAllGb) {
+      const startedExamIds = new Set(gradebooks.map((g) => g.exam_id));
+      emptyCounts.gradebooksNotStarted = completedExamIds.filter(
+        (id) => !startedExamIds.has(id),
+      ).length;
+    }
+  }
+
+  if (openRes || openRc) {
+    let snapQuery = supabase
+      .from("student_term_result_snapshots")
+      .select("id, class_id, is_stale, academic_year_id, term_id")
+      .limit(500);
+    if (academicYearId) snapQuery = snapQuery.eq("academic_year_id", academicYearId);
+    if (termId) snapQuery = snapQuery.eq("term_id", termId);
+    const { data: snapRows } = await snapQuery;
+    const snaps =
+      (snapRows as Array<{ class_id: string; is_stale: boolean }> | null) ?? [];
+    const byClass = new Map<string, boolean>();
+    for (const s of snaps) {
+      const prev = byClass.get(s.class_id) ?? false;
+      byClass.set(s.class_id, prev || Boolean(s.is_stale));
+    }
+    emptyCounts.resultsClassesReady = [...byClass.values()].filter((stale) => !stale)
+      .length;
+    emptyCounts.resultsClassesStale = [...byClass.values()].filter(Boolean).length;
+  }
+
+  if (openRc) {
+    let rcQuery = supabase
+      .from("student_report_cards")
+      .select("id, status, academic_year_id, term_id")
+      .limit(500);
+    if (academicYearId) rcQuery = rcQuery.eq("academic_year_id", academicYearId);
+    if (termId) rcQuery = rcQuery.eq("term_id", termId);
+    const { data: rcRows } = await rcQuery;
+    const cards = (rcRows as Array<{ status: string }> | null) ?? [];
+    emptyCounts.reportCardsDraft = cards.filter((c) => c.status === "DRAFT").length;
+    emptyCounts.reportCardsReviewed = cards.filter(
+      (c) => c.status === "REVIEWED",
+    ).length;
+    emptyCounts.reportCardsApproved = cards.filter(
+      (c) => c.status === "APPROVED",
+    ).length;
+    emptyCounts.reportCardsPublished = cards.filter(
+      (c) => c.status === "PUBLISHED",
+    ).length;
+  }
+
+  const ctx = {
+    academicYearId,
+    termId,
+  };
+
+  const nextActions = buildOverviewNextActions({
+    canManageSetup: manage,
+    canOpenGradebook: openGb,
+    canViewAllGradebooks: viewAllGb,
+    canOpenResults: openRes,
+    canRecalculateResults: canRecalc,
+    canOpenReportCards: openRc,
+    canApproveOrPublishReportCards: canApproveOrPublish,
+    canEditReportCardRemarks: canEditRemarks,
+    academicYearId,
+    termId,
+    activePeriodId: activePeriod?.id ?? null,
+    counts: emptyCounts,
+    gradebookHref: gradebookHref(ctx),
+    resultsHref: resultsHref(ctx),
+    reportCardsHref: reportCardsHref(ctx),
+    settingsHref: examSettingsHref(),
+  });
+
+  return {
+    role: String(role),
+    canManageSetup: manage,
+    canOpenGradebook: openGb,
+    canViewAllGradebooks: viewAllGb,
+    canOpenResults: openRes,
+    canRecalculateResults: canRecalc,
+    canOpenReportCards: openRc,
+    canApproveOrPublishReportCards: canApproveOrPublish,
+    canEditReportCardRemarks: canEditRemarks,
+    academicYearId,
+    academicYearName,
+    termId,
+    termName,
+    activePeriodId: activePeriod?.id ?? null,
+    activePeriodName: activePeriod?.name ?? null,
+    counts: emptyCounts,
+    nextActions,
+    progressStage: inferProgressStage(emptyCounts),
+  };
+}
+
+/**
+ * Examination Command Centre summary — presentation only.
+ * Counts and class aggregates; no student names or marks.
+ */
+export async function getExaminationCommandCentre(): Promise<
+  import("./command-centre").ExaminationCommandCentreSummary | null
+> {
+  const overview = await getExaminationsOverview();
+  if (!overview) return null;
+
+  const {
+    buildCommandCentreFromOverview,
+    aggregateClassSummaries,
+  } = await import("@/features/examinations/command-centre");
+  const {
+    gradebookHref,
+    resultsHref,
+    reportCardsHref,
+  } = await import("@/features/examinations/context-links");
+
+  const roleView: import("./command-centre").CommandRoleView =
+    overview.canViewAllGradebooks || overview.canManageSetup
+      ? "admin"
+      : overview.canOpenGradebook ||
+          overview.canOpenResults ||
+          overview.canOpenReportCards
+        ? "teacher"
+        : "schedule_only";
+
+  const ctx = {
+    academicYearId: overview.academicYearId,
+    termId: overview.termId,
+  };
+
+  let classSummaries: import("./command-centre").ClassCommandSummary[] = [];
+  let teacherWork: import("./command-centre").TeacherWorkItem[] = [];
+
+  const supabase = await createSupabaseServerClient();
+
+  if (roleView === "admin" && overview.academicYearId) {
+    let periodQuery = supabase
+      .from("exam_periods")
+      .select("id")
+      .eq("academic_year_id", overview.academicYearId)
+      .neq("status", "ARCHIVED")
+      .limit(20);
+    if (overview.termId) {
+      periodQuery = periodQuery.eq("term_id", overview.termId);
+    }
+    const { data: periodIdsRows } = await periodQuery;
+    const periodIds = (
+      (periodIdsRows as Array<{ id: string }> | null) ?? []
+    ).map((p) => p.id);
+
+    const { data: classRows } = await supabase
+      .from("classes")
+      .select("id, name, grade_levels(name)")
+      .eq("academic_year_id", overview.academicYearId)
+      .order("name")
+      .limit(60);
+
+    const classes = (
+      (classRows as Array<{
+        id: string;
+        name: string;
+        grade_levels: { name: string } | { name: string }[] | null;
+      }> | null) ?? []
+    ).map((c) => {
+      const gl = Array.isArray(c.grade_levels)
+        ? c.grade_levels[0]
+        : c.grade_levels;
+      return {
+        id: c.id,
+        name: c.name,
+        grade_name: gl?.name ?? "Grade",
+      };
+    });
+    const classIds = new Set(classes.map((c) => c.id));
+
+    let gradebooks: Array<{ class_id: string; status: string }> = [];
+    if (periodIds.length > 0) {
+      const { data: examRows } = await supabase
+        .from("exams")
+        .select("id")
+        .in("exam_period_id", periodIds)
+        .limit(500);
+      const examIds = ((examRows as Array<{ id: string }> | null) ?? []).map(
+        (e) => e.id,
+      );
+      if (examIds.length > 0) {
+        const { data: gbRows } = await supabase
+          .from("exam_gradebooks")
+          .select("class_id, status")
+          .in("exam_id", examIds)
+          .limit(400);
+        gradebooks = (
+          (gbRows as Array<{ class_id: string; status: string }> | null) ?? []
+        ).filter((g) => classIds.has(g.class_id));
+      }
+    }
+
+    const resultByClass = new Map<string, boolean>();
+    const reportByClass = new Map<
+      string,
+      { draft: number; approved: number; published: number; other: number }
+    >();
+
+    if (overview.termId) {
+      const [{ data: snapRows }, { data: rcRows }] = await Promise.all([
+        supabase
+          .from("student_term_result_snapshots")
+          .select("class_id, is_stale")
+          .eq("academic_year_id", overview.academicYearId)
+          .eq("term_id", overview.termId)
+          .limit(500),
+        supabase
+          .from("student_report_cards")
+          .select("class_id, status")
+          .eq("academic_year_id", overview.academicYearId)
+          .eq("term_id", overview.termId)
+          .limit(500),
+      ]);
+
+      for (const s of (snapRows as Array<{
+        class_id: string;
+        is_stale: boolean;
+      }> | null) ?? []) {
+        if (!classIds.has(s.class_id)) continue;
+        resultByClass.set(
+          s.class_id,
+          Boolean(resultByClass.get(s.class_id)) || Boolean(s.is_stale),
+        );
+      }
+
+      for (const r of (rcRows as Array<{
+        class_id: string;
+        status: string;
+      }> | null) ?? []) {
+        if (!classIds.has(r.class_id)) continue;
+        const cur = reportByClass.get(r.class_id) ?? {
+          draft: 0,
+          approved: 0,
+          published: 0,
+          other: 0,
+        };
+        if (r.status === "DRAFT" || r.status === "REVIEWED") cur.draft += 1;
+        else if (r.status === "APPROVED") cur.approved += 1;
+        else if (r.status === "PUBLISHED") cur.published += 1;
+        else cur.other += 1;
+        reportByClass.set(r.class_id, cur);
+      }
+    }
+
+    classSummaries = aggregateClassSummaries({
+      classes,
+      gradebooks,
+      resultByClass,
+      reportByClass,
+      academicYearId: overview.academicYearId,
+      termId: overview.termId,
+      resultsHref: (classId) => resultsHref({ ...ctx, classId }),
+      gradebookHref: (classId) => gradebookHref({ ...ctx, classId }),
+      reportCardsHref: (classId) => reportCardsHref({ ...ctx, classId }),
+    });
+  }
+
+  if (roleView === "teacher" && overview.canOpenGradebook) {
+    const { data: gbRows } = await supabase
+      .from("exam_gradebooks")
+      .select("id, status, exams(exam_reference)")
+      .order("updated_at", { ascending: false })
+      .limit(40);
+
+    teacherWork = (
+      (gbRows as Array<{
+        id: string;
+        status: string;
+        exams:
+          | { exam_reference?: string }
+          | { exam_reference?: string }[]
+          | null;
+      }> | null) ?? []
+    ).map((g) => {
+      const exam = Array.isArray(g.exams) ? g.exams[0] : g.exams;
+      const statusLabel =
+        g.status === "DRAFT"
+          ? "In progress"
+          : g.status === "REOPENED"
+            ? "Reopened"
+            : g.status === "SUBMITTED"
+              ? "Submitted"
+              : g.status === "LOCKED"
+                ? "Locked"
+                : "Ready";
+      return {
+        id: g.id,
+        title: exam?.exam_reference ?? "Assigned gradebook",
+        statusLabel,
+        href: `/dashboard/gradebook/${g.id}`,
+        detail:
+          g.status === "REOPENED"
+            ? "Correct marks and submit again."
+            : g.status === "DRAFT"
+              ? "Continue entering marks, then submit."
+              : "Open to review.",
+      };
+    });
+  }
+
+  return buildCommandCentreFromOverview({
+    roleView,
+    counts: overview.counts,
+    hasYear: Boolean(overview.academicYearId),
+    hasTerm: Boolean(overview.termId),
+    hasPeriod: Boolean(overview.activePeriodId),
+    academicYearId: overview.academicYearId,
+    academicYearName: overview.academicYearName,
+    termId: overview.termId,
+    termName: overview.termName,
+    activePeriodId: overview.activePeriodId,
+    activePeriodName: overview.activePeriodName,
+    nextActions: overview.nextActions,
+    classSummaries,
+    teacherWork,
+    capabilities: {
+      canManageSetup: overview.canManageSetup,
+      canOpenGradebook: overview.canOpenGradebook,
+      canViewAllGradebooks: overview.canViewAllGradebooks,
+      canOpenResults: overview.canOpenResults,
+      canRecalculateResults: overview.canRecalculateResults,
+      canOpenReportCards: overview.canOpenReportCards,
+      canApproveOrPublishReportCards: overview.canApproveOrPublishReportCards,
+      canEditReportCardRemarks: overview.canEditReportCardRemarks,
+    },
+    gradebookHref: gradebookHref(ctx),
+    resultsHref: resultsHref(ctx),
+    reportCardsHref: reportCardsHref(ctx),
+  });
+}

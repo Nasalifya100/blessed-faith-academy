@@ -6,6 +6,8 @@ import type {
   ReportCardListItem,
   ReportCardsHubContext,
 } from "@/features/report-cards/queries";
+import { REPORT_CARD_STATUS_LABELS } from "@/features/report-cards/types";
+import { resultsHref } from "@/features/examinations/context-links";
 import { filterPanelClassName } from "@/components/ui/admin-chrome";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -35,8 +37,9 @@ export function ReportCardsDashboard(props: {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Report Cards</h1>
           <p className="text-sm text-muted-foreground">
-            Prepare, approve, publish, and print official term report cards from
-            Phase 2D.1 academic result snapshots. Calculation stays in Results.
+            Prepare, approve, publish, and print official term report cards.
+            Academic marks always come from calculated Results — this screen does
+            not recalculate grades.
           </p>
         </div>
         {hub.canApprove || hub.canReview || hub.canEditRemarks ? (
@@ -49,6 +52,16 @@ export function ReportCardsDashboard(props: {
                 Settings
               </Link>
             ) : null}
+            <Link
+              href={resultsHref({
+                academicYearId: filters.academicYearId,
+                termId: filters.termId,
+                classId: filters.classId,
+              })}
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              Results
+            </Link>
             <GenerateDraftsButton
               academicYearId={filters.academicYearId}
               termId={filters.termId}
@@ -180,7 +193,9 @@ export function ReportCardsDashboard(props: {
                             {row.admission_number}
                           </div>
                         </td>
-                        <td className="px-3 py-2">{row.status}</td>
+                        <td className="px-3 py-2">
+                          {REPORT_CARD_STATUS_LABELS[row.status] ?? row.status}
+                        </td>
                         <td className="px-3 py-2 text-xs">
                           T: {row.teacher_remark ? "Yes" : "—"} · H:{" "}
                           {row.headteacher_remark ? "Yes" : "—"}

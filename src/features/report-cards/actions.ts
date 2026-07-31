@@ -67,10 +67,10 @@ function mapSettings(row: Record<string, unknown> | null): ReportCardSettings {
 function normalizeActionError(message: string): string {
   const msg = message || "Request failed.";
   if (/revision conflict/i.test(msg)) {
-    return "Revision conflict. Refresh the page and try again.";
+    return "This report card was updated elsewhere. Refresh the page before continuing.";
   }
   if (/stale|outdated|fingerprint|recalculate/i.test(msg)) {
-    return "Results are missing, stale, or changed. Recalculate Results, then regenerate report cards.";
+    return "Marks changed after these results were calculated. Calculate the results again, then regenerate report cards.";
   }
   if (/not authorized|permission/i.test(msg)) {
     return "You are not authorized for this action.";
@@ -337,12 +337,12 @@ async function buildRenderPayloadForCard(
     .select("*")
     .eq("id", card.term_result_snapshot_id)
     .maybeSingle();
-  if (!termSnap) return { error: "Linked term result snapshot missing." };
+  if (!termSnap) return { error: "Linked class results are missing. Calculate results again before approval." };
   if (termSnap.source_fingerprint !== card.source_fingerprint) {
     return { error: "Results have changed; regenerate before approval." };
   }
   if (termSnap.is_stale) {
-    return { error: "Results are stale; recalculate before approval." };
+    return { error: "Results are outdated; calculate results again before approval." };
   }
 
   // Gradebook drift (same readiness gate as draft generation).

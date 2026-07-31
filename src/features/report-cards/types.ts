@@ -11,6 +11,15 @@ export type ReportCardStatus =
   | "UNPUBLISHED"
   | "VOIDED";
 
+export const REPORT_CARD_STATUS_LABELS: Record<ReportCardStatus, string> = {
+  DRAFT: "Draft",
+  REVIEWED: "Reviewed",
+  APPROVED: "Approved",
+  PUBLISHED: "Published",
+  UNPUBLISHED: "Unpublished",
+  VOIDED: "Voided",
+};
+
 export type ReportCardSettings = {
   title: string;
   show_school_logo: boolean;

@@ -400,7 +400,7 @@ export function MarksEntryWorkspace({
         : displaySaveState === "failed"
           ? "Save failed"
           : displaySaveState === "conflict"
-            ? "Revision conflict"
+            ? "Updated elsewhere — refresh"
             : "All changes saved";
 
   return (
@@ -417,7 +417,7 @@ export function MarksEntryWorkspace({
             </p>
             <p>
               {labels.academic_year_name}
-              {labels.term_name ? ` · ${labels.term_name}` : ""} · Revision{" "}
+              {labels.term_name ? ` · ${labels.term_name}` : ""} · Save version{" "}
               {revision}
               {lastSavedAt
                 ? ` · Last saved ${new Date(lastSavedAt).toLocaleString("en-ZM")}`

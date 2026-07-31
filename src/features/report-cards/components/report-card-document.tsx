@@ -270,8 +270,8 @@ export function ReportCardDocument(props: {
           </p>
         ) : null}
         <p className="sm:col-span-2 text-[10px] text-neutral-500">
-          Source fingerprint {payload.source_fingerprint.slice(0, 12)}… · Engine{" "}
-          {payload.engine_version} · Template {payload.template_version}
+          Official calculated record · Results engine {payload.engine_version} ·
+          Template {payload.template_version}
         </p>
       </footer>
     </article>

@@ -13,6 +13,7 @@
     "preflight": "node scripts/production-preflight.cjs --offline",
     "integrity:offline": "node scripts/operational-integrity-verify.cjs --offline",
     "phase2g:verify": "node scripts/phase2g-ops-verify.cjs",
+    "examinations:verify": "node scripts/examinations-integrity-verify.cjs --offline",
     "preview": "node scripts/write-build-info.cjs && opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "node scripts/write-build-info.cjs && opennextjs-cloudflare build && node scripts/cf-upload-and-promote.cjs",
     "upload": "node scripts/write-build-info.cjs && opennextjs-cloudflare build && opennextjs-cloudflare upload -- --keep-vars",

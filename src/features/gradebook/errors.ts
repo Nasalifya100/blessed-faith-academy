@@ -41,7 +41,7 @@ export function normalizeGradebookError(
     return {
       code: "REVISION_CONFLICT",
       message:
-        "This gradebook was updated elsewhere. Reload the latest version before continuing. Your unsaved local changes are kept until you choose.",
+        "This gradebook was updated elsewhere. Refresh the page before continuing. Your unsaved local changes are kept until you choose.",
     };
   }
 

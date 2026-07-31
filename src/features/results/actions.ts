@@ -605,11 +605,11 @@ export async function recalculateClassTermAction(
 
   if (error) {
     const msg = error.message ?? "Recalculation failed.";
-    if (/concurrent|lock|stale|mismatch|does not match/i.test(msg)) {
+    if (/concurrent|lock|stale|mismatch|does not match|fingerprint/i.test(msg)) {
       return {
         ok: false,
         error:
-          "Recalculation rejected: source marks changed, concurrent recalculation, or payload failed server validation. Refresh and try again.",
+          "Marks changed while calculating, or another calculation is already running. Refresh the page and calculate again.",
       };
     }
     return { ok: false, error: msg };
