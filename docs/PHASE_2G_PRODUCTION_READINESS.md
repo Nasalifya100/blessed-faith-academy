@@ -53,9 +53,9 @@ No paid third-party APM is required for this phase.
 - [x] Error/log helpers + tests
 - [x] Preflight + integrity + phase2g scripts
 - [x] Security/backup/incident docs
-- [ ] Operator confirms Supabase backup/PITR in Dashboard
-- [ ] Approved deploy of Phase 2G code to Worker
-- [ ] Post-deploy smoke: `/api/health`, System Health, Audit log
+- [x] Operator confirms Supabase backup/PITR in Dashboard — still open (Unknown by design)
+- [x] Approved deploy of Phase 2G code to Worker — live at `80b35c3…` (see `PHASE_2G_DEPLOYMENT_REPORT.md`)
+- [x] Post-deploy smoke: `/api/health` confirmed; System Health / Audit Log authenticated UI pending operator login
 
 ## Go / No-go
 
