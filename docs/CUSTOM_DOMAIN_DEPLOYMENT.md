@@ -1,19 +1,21 @@
 # Custom Domain Deployment — portal.blessedfaithacademy.com
 
-Preparation runbook for moving the School Management System from the Cloudflare
-Workers hostname to a permanent custom domain.
+Runbook for serving the School Management System from a permanent custom
+domain, plus the recorded result of the cutover release.
 
-**Nothing in this document has been executed.** No DNS record, Cloudflare
-setting, or Supabase setting was changed by the preparation work.
+**Status: completed on 2026-09-20.** Operator-side Cloudflare, Supabase, and
+GitHub configuration was done manually; the application-side release is
+recorded in [Cutover release record](#cutover-release-record). Nothing in this
+repository changes DNS or Supabase settings.
 
 ## Target architecture
 
 | Property | Value |
 |---|---|
 | Cloudflare Worker (unchanged) | `bfa-sms-staging` |
-| Current URL | https://bfa-sms-staging.nasalifya007.workers.dev |
-| Future School Management System | https://portal.blessedfaithacademy.com |
-| Future public website | https://blessedfaithacademy.com (separate site, not this Worker) |
+| Canonical School Management System | https://portal.blessedfaithacademy.com |
+| Legacy Workers URL (temporary cutover support) | https://bfa-sms-staging.nasalifya007.workers.dev |
+| Public website (separate site, not this Worker) | https://blessedfaithacademy.com |
 | Supabase project | unchanged |
 | Database schema | unchanged (no migrations in this change set) |
 
@@ -209,7 +211,9 @@ The portal must never compete with, or stand in for, the public website.
 
 Already enforced in the application:
 
-- `src/app/robots.ts` serves `Disallow: /` for all agents on this origin.
+- `src/app/robots.ts` serves `Disallow: /` for all agents on this origin, and
+  `/robots.txt` is listed in the middleware public paths so crawlers receive the
+  file itself rather than a redirect to `/login`.
 - Root layout metadata sets `robots: { index: false, follow: false, nocache: true }`,
   so every page emits `noindex, nofollow`.
 - `metadataBase` derives from `NEXT_PUBLIC_SITE_URL`, so no hostname is baked in.
@@ -225,3 +229,143 @@ Recommended for the separate public website project (not this repository):
 Optional hardening for this origin, if ever required: add a
 `X-Robots-Tag: noindex, nofollow` response header at the Cloudflare edge. This
 is not currently configured, and the meta-level controls above are sufficient.
+
+---
+
+# Cutover release record
+
+**Date:** 2026-09-20 · **Outcome:** deployed successfully, no rollback.
+
+## Commits
+
+| Role | SHA | Message |
+|---|---|---|
+| Base before release | `6b486d81d37592b468ce2a88d0db554e4ae7a835` | docs(examinations): record examinations release |
+| Domain release | `5dd7554f3c86fde0901ad1f6bb4f0c0d1d3ce96d` | feat(deployment): prepare portal custom domain |
+| Hotfix | `123133326e443509d51dbde62d44c7231f38ed07` | fix(deployment): serve portal robots.txt without auth redirect |
+
+Domain release: 11 files, +415 / −40. Hotfix: 1 file, +1 / −1.
+
+## Validation
+
+`npm run lint` pass (0 errors, 4 pre-existing warnings) · `npm test` **306
+passed** · `npx tsc --noEmit` pass · `npm run build` pass · `npm run cf:build`
+pass · `production-preflight --offline` PASSED (fail=0) · `phase2g-ops-verify`
+PASSED · `examinations-integrity-verify --offline` PASSED (56 checks) ·
+`git diff --check` clean. Re-run in full after the hotfix with identical results.
+
+## Workflow runs
+
+| Run | Commit | Started (UTC) | Completed (UTC) | Result |
+|---|---|---|---|---|
+| Deploy staging **#16** | `5dd7554` | 2026-09-20T16:32:34Z | 2026-09-20T16:38:07Z | success |
+| Deploy staging **#17** | `1231333` | 2026-09-20T16:45:55Z | 2026-09-20T16:51:28Z | success |
+
+Both runs: Phase 1 repository checks, Phase 2–3 Supabase migrations, Phase 4
+staging verification (2B/2C/2D.1/2D.2), Phase 5 Cloudflare upload + promote to
+100%, Phase 6 summary — all succeeded.
+
+## Migrations
+
+No migrations in this release. The migration gate ran and the apply step was a
+safe no-op on both runs. No database reset; no migration history change.
+
+## Portal verification (after run #17)
+
+| Route | Result |
+|---|---|
+| `/` | 307 → `/login` |
+| `/login` | 200 |
+| `/api/health` | 200 |
+| `/dashboard` | 307 → `/login` |
+| `/dashboard/examinations` | 307 → `/login` |
+| `/dashboard/gradebook` | 307 → `/login` |
+| `/dashboard/results` | 307 → `/login` |
+| `/dashboard/report-cards` | 307 → `/login` |
+| `/dashboard/settings/system-health` | 307 → `/login` |
+| `/robots.txt` | 200 — `User-Agent: * / Disallow: /` |
+
+HTTPS negotiated with a valid certificate (default .NET chain validation). All
+redirects are relative — none point at `workers.dev` or the apex domain. No
+redirect loop, no 5xx, no OpenNext chunk error, no stack trace or secret in any
+response. `/login` emits `<meta name="robots" content="noindex, nofollow, nocache">`.
+
+## Deployment metadata
+
+`GET https://portal.blessedfaithacademy.com/api/health`
+
+```json
+{
+  "status": "ok",
+  "applicationVersion": "0.1.0",
+  "environment": "effective-production",
+  "commit": "123133326e44"
+}
+```
+
+Matches the hotfix commit `1231333`.
+
+## Public website boundary
+
+`blessedfaithacademy.com` does not resolve and is not routed to this Worker. The
+application never claims the apex: the canonical origin comes only from
+`NEXT_PUBLIC_SITE_URL`, and no apex reference appears in served HTML.
+
+## Legacy Workers URL
+
+`https://bfa-sms-staging.nasalifya007.workers.dev` remains reachable and healthy,
+serving the same Worker and the same commit with identical relative redirects.
+It is **temporary cutover support only** — not the canonical URL. Retire it by
+clearing `NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS` and removing the workers.dev
+entry from the Supabase redirect list once no reset links remain in flight.
+
+## Password-reset domain verification
+
+Verified statically and by unit test (21 assertions in
+`password-reset-schemas.test.ts`):
+
+- the configured portal origin is trusted and produces
+  `https://portal.blessedfaithacademy.com/auth/reset-password`;
+- the legacy Workers host is trusted **only** when explicitly allowlisted;
+- arbitrary external hosts and forwarded headers are rejected;
+- open redirects remain blocked (`safePostAuthPath`).
+
+Live email verification is **pending — operator-owned**. The deployed value of
+the `NEXT_PUBLIC_SITE_URL` secret cannot be read remotely, so the operator
+should confirm one admin-triggered reset to an approved test account and check
+that the link host is the portal.
+
+## Authenticated smoke
+
+**Pending — operator-owned.** No approved staff credentials were available, so
+no authenticated journey was exercised. Staff will be signed out by the
+hostname change and must sign in again; this is expected.
+
+## Cloudflare
+
+Worker remains `bfa-sms-staging`; no new Worker was created, no secret was
+changed by this release, and the custom domain serves this Worker. Upload and
+promotion to 100% succeeded on both runs, and the prior version remains
+available for rollback.
+
+## Known limitations
+
+- Live password-reset email host unconfirmed (operator-owned).
+- Authenticated portal smoke unconfirmed (operator-owned).
+- The workers.dev hostname is still live and still trusted; clear it when retiring.
+- The public website does not exist yet, so the apex is unresolved.
+- A docs-only commit still retriggers the full Deploy staging workflow.
+
+## Defect found and fixed during cutover
+
+Run #16 deployed correctly, but `/robots.txt` returned `307 → /login` because
+the auth middleware matcher intercepted it, which would have left crawlers
+without a valid robots file. Adding `/robots.txt` to the middleware public paths
+(commit `1231333`, run #17) fixed it; `/robots.txt` now returns 200 with
+`Disallow: /`. No other defect was found.
+
+## Rollback decision
+
+**No rollback.** Portal resolves over HTTPS, authentication gates hold,
+health reports the expected commit, the verifier chain passed, and the legacy
+hostname remains as a fallback.
