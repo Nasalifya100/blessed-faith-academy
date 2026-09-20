@@ -1,20 +1,34 @@
 /**
  * Canonical public site origin for Auth email redirects.
  *
- * Prefer an allowlisted request origin (staging vs local) when the admin
- * triggers a reset, then NEXT_PUBLIC_SITE_URL. Never fall back to localhost
- * in production builds.
+ * Prefer an allowlisted request origin when the admin triggers a reset, then
+ * NEXT_PUBLIC_SITE_URL. Never fall back to localhost in production builds.
+ * Deployment hostnames come from configuration only.
  */
 
-const BUILTIN_TRUSTED_HOSTS = new Set([
-  "localhost:3000",
-  "127.0.0.1:3000",
-  "bfa-sms-staging.nasalifya007.workers.dev",
-]);
+const BUILTIN_TRUSTED_HOSTS = new Set(["localhost:3000", "127.0.0.1:3000"]);
 
 function configuredSiteUrl(): string | null {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/$/, "");
   return configured || null;
+}
+
+/**
+ * Extra hosts allowed during a domain cutover (comma-separated hostnames,
+ * e.g. the old Workers hostname while DNS propagates). Deployment hostnames
+ * are never hardcoded here.
+ */
+function additionalTrustedHosts(): Set<string> {
+  const raw = process.env.NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS?.trim();
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase().replace(/\/$/, ""))
+      .filter(Boolean)
+      .map((entry) => (entry.includes("://") ? hostFromOrigin(entry) : entry))
+      .filter((entry): entry is string => Boolean(entry)),
+  );
 }
 
 function hostFromOrigin(origin: string): string | null {
@@ -44,6 +58,7 @@ export function isTrustedPasswordResetOrigin(origin: string): boolean {
   const host = hostFromOrigin(origin);
   if (!host) return false;
   if (BUILTIN_TRUSTED_HOSTS.has(host)) return true;
+  if (additionalTrustedHosts().has(host)) return true;
 
   const configured = configuredSiteUrl();
   if (configured) {
@@ -79,7 +94,7 @@ export function getSiteUrl(
   if (configured) {
     if (nodeEnv === "production" && isLocalhostOrigin(configured)) {
       throw new Error(
-        "NEXT_PUBLIC_SITE_URL must not be localhost in production. Set it to the deployed site origin (e.g. https://bfa-sms-staging.nasalifya007.workers.dev).",
+        "NEXT_PUBLIC_SITE_URL must not be localhost in production. Set it to the canonical deployed site origin (e.g. https://portal.blessedfaithacademy.com).",
       );
     }
     return configured;

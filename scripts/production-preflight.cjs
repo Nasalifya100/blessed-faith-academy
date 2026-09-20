@@ -127,6 +127,56 @@ function checkMigrationsLocal() {
   }
 }
 
+function checkCanonicalOrigin() {
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
+  if (!siteUrl) {
+    warn(
+      "NEXT_PUBLIC_SITE_URL not set in this shell (required at build and runtime for auth email links).",
+    );
+  } else {
+    let host = null;
+    try {
+      host = new URL(siteUrl).host.toLowerCase();
+    } catch {
+      fail(`NEXT_PUBLIC_SITE_URL is not a valid absolute URL: ${siteUrl}`);
+    }
+    if (host) {
+      if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) {
+        fail(
+          "NEXT_PUBLIC_SITE_URL is localhost — never build or deploy the Worker with this value.",
+        );
+      } else if (host.endsWith(".workers.dev")) {
+        warn(
+          `NEXT_PUBLIC_SITE_URL still points at the Workers hostname (${host}). See docs/CUSTOM_DOMAIN_DEPLOYMENT.md for the custom-domain cutover.`,
+        );
+      } else {
+        ok(`Canonical site origin configured: ${siteUrl}`);
+      }
+    }
+  }
+
+  // Deployment hostnames must come from configuration, never application code.
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+        if (fs.readFileSync(full, "utf8").includes("workers.dev")) {
+          offenders.push(path.relative(ROOT, full).replace(/\\/g, "/"));
+        }
+      }
+    }
+  };
+  walk(path.join(ROOT, "src"));
+  if (offenders.length > 0) {
+    fail(`Hardcoded workers.dev hostname in application code: ${offenders.join(", ")}`);
+  } else {
+    ok("No hardcoded workers.dev hostname in application code.");
+  }
+}
+
 function checkBuildMetadata() {
   const version = process.env.NEXT_PUBLIC_APP_VERSION || "0.1.0";
   const sha = process.env.NEXT_PUBLIC_GIT_SHA || process.env.GITHUB_SHA || "unknown";
@@ -199,6 +249,7 @@ function main() {
   checkRepoBasics();
   checkVerifiers();
   checkMigrationsLocal();
+  checkCanonicalOrigin();
   checkBuildMetadata();
   checkEnvOffline();
   checkGitCleanExpectation();

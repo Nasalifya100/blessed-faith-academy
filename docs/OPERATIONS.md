@@ -308,7 +308,8 @@ Budget-friendly staging runs on **Cloudflare Workers** via `@opennextjs/cloudfla
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Public | Staging project URL (build + runtime) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Staging anon key (build + runtime) |
-| `NEXT_PUBLIC_SITE_URL` | Public | Public app origin for Auth email redirects (no trailing slash). Staging: `https://bfa-sms-staging.nasalifya007.workers.dev`. Local: `http://localhost:3000`. Must **not** be localhost when building/deploying the Worker. |
+| `NEXT_PUBLIC_SITE_URL` | Public | Canonical app origin for Auth email redirects (no trailing slash). Target: `https://portal.blessedfaithacademy.com`. Local: `http://localhost:3000`. Must **not** be localhost when building/deploying the Worker. See `docs/CUSTOM_DOMAIN_DEPLOYMENT.md`. |
+| `NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS` | Public (optional) | Comma-separated extra hostnames trusted for password-reset redirects during a domain cutover. Empty once the portal domain is the only entry point. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Secret** | Staging service role only; Cloudflare Secret; never `NEXT_PUBLIC_` |
 
 Also configure Supabase Auth **Site URL** and **Redirect URLs** (see `docs/PASSWORD_RESET_FIX_REPORT.md`).
@@ -338,14 +339,14 @@ Compatibility flags in `wrangler.jsonc`: `nodejs_compat`, `global_fetch_strictly
 
 **Windows:** OpenNext Windows support is limited. If `preview`/`deploy` fails on native Windows, use WSL or Linux CI.
 
-### Supabase Auth redirects (staging)
-
-After the Worker URL exists (`https://bfa-sms-staging.<account>.workers.dev`):
+### Supabase Auth redirects
 
 1. Supabase → Authentication → URL Configuration  
-2. **Site URL** = the Workers URL  
-3. **Redirect URLs** include that origin (and `http://localhost:3000/**` if developing against staging DB)  
+2. **Site URL** = the canonical app origin (`https://portal.blessedfaithacademy.com` after cutover)
+3. **Redirect URLs** include that origin (and `http://localhost:3000/**` if developing against the same DB)
 4. Confirm public signup remains **OFF**
+
+Full cutover procedure: `docs/CUSTOM_DOMAIN_DEPLOYMENT.md`.
 
 ### Rollback
 

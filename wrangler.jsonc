@@ -9,6 +9,11 @@
 //
 // Build (Workers Builds / CI) — same names under Build variables and secrets
 // Local CLI build — .env.local (deploy script uses --keep-vars)
+//
+// Custom domain — portal.blessedfaithacademy.com is attached to this Worker in
+// the Cloudflare Dashboard (Workers → Settings → Domains & Routes). It is left
+// out of this file on purpose so a deploy never mutates DNS.
+// See docs/CUSTOM_DOMAIN_DEPLOYMENT.md.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bfa-sms-staging",

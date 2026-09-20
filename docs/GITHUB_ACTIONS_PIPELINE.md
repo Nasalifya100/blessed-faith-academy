@@ -90,7 +90,7 @@ Configure these on the **staging** environment (not only repository secrets, unl
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | build, verify, deploy | Staging Supabase URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | build, verify, deploy | Staging anon key |
-| `NEXT_PUBLIC_SITE_URL` | build, deploy | Must be `https://bfa-sms-staging.nasalifya007.workers.dev` for Worker builds |
+| `NEXT_PUBLIC_SITE_URL` | build, deploy | Canonical portal origin for Worker builds (`https://portal.blessedfaithacademy.com` after cutover). See `docs/CUSTOM_DOMAIN_DEPLOYMENT.md` |
 | `SUPABASE_SERVICE_ROLE_KEY` | verification | Service role for `phase2b-staging-verify.cjs` |
 | `SUPABASE_ACCESS_TOKEN` | migrations | Supabase CLI auth ([account tokens](https://supabase.com/dashboard/account/tokens)) |
 | `SUPABASE_PROJECT_REF` | migrations | `qaczvlbgsxcrdcdgsfpo` |
@@ -99,6 +99,13 @@ Configure these on the **staging** environment (not only repository secrets, unl
 | `CLOUDFLARE_ACCOUNT_ID` | deploy | Cloudflare account id |
 
 **CI workflow** does **not** read these secrets (uses build placeholders only).
+
+Repository **variables** (not secrets), used for non-sensitive display and cutover config:
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `PUBLIC_APP_URL` | deploy summary | Live URL printed in the Actions job summary |
+| `ADDITIONAL_TRUSTED_HOSTS` | deploy | Optional comma-separated cutover hostnames for password-reset redirects |
 
 Never commit secrets. Never print secret values in logs or summaries.
 

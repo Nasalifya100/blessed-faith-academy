@@ -19,12 +19,21 @@ import {
 } from "@/lib/site-url";
 
 const ORIGINAL_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL;
+const ORIGINAL_TRUSTED_HOSTS = process.env.NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS;
+
+const PORTAL_URL = "https://portal.blessedfaithacademy.com";
+const LEGACY_WORKER_HOST = "bfa-sms-staging.nasalifya007.workers.dev";
 
 afterEach(() => {
   if (ORIGINAL_SITE_URL === undefined) {
     delete process.env.NEXT_PUBLIC_SITE_URL;
   } else {
     process.env.NEXT_PUBLIC_SITE_URL = ORIGINAL_SITE_URL;
+  }
+  if (ORIGINAL_TRUSTED_HOSTS === undefined) {
+    delete process.env.NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS;
+  } else {
+    process.env.NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS = ORIGINAL_TRUSTED_HOSTS;
   }
 });
 
@@ -107,14 +116,28 @@ describe("assertSafeAuditMetadata", () => {
 
 describe("site url helpers", () => {
   it("builds production reset redirect from NEXT_PUBLIC_SITE_URL", () => {
-    process.env.NEXT_PUBLIC_SITE_URL =
-      "https://bfa-sms-staging.nasalifya007.workers.dev";
-    expect(getSiteUrl(null, { nodeEnv: "production" })).toBe(
-      "https://bfa-sms-staging.nasalifya007.workers.dev",
-    );
+    process.env.NEXT_PUBLIC_SITE_URL = PORTAL_URL;
+    expect(getSiteUrl(null, { nodeEnv: "production" })).toBe(PORTAL_URL);
     expect(getPasswordResetRedirectUrl(null, { nodeEnv: "production" })).toBe(
-      "https://bfa-sms-staging.nasalifya007.workers.dev/auth/reset-password",
+      `${PORTAL_URL}/auth/reset-password`,
     );
+  });
+
+  it("trusts the configured site origin without hardcoding a deployment host", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = PORTAL_URL;
+    expect(isTrustedPasswordResetOrigin(PORTAL_URL)).toBe(true);
+    expect(isTrustedPasswordResetOrigin(`https://${LEGACY_WORKER_HOST}`)).toBe(
+      false,
+    );
+  });
+
+  it("trusts cutover hosts only when explicitly allowlisted", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = PORTAL_URL;
+    process.env.NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS = LEGACY_WORKER_HOST;
+    expect(isTrustedPasswordResetOrigin(`https://${LEGACY_WORKER_HOST}`)).toBe(
+      true,
+    );
+    expect(isTrustedPasswordResetOrigin("https://evil.example")).toBe(false);
   });
 
   it("builds local reset redirect from localhost site url", () => {
@@ -126,14 +149,11 @@ describe("site url helpers", () => {
 
   it("prefers allowlisted request origin over misconfigured env", () => {
     process.env.NEXT_PUBLIC_SITE_URL = "http://localhost:3000";
+    process.env.NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS =
+      "portal.blessedfaithacademy.com";
     expect(
-      getPasswordResetRedirectUrl(
-        "https://bfa-sms-staging.nasalifya007.workers.dev",
-        { nodeEnv: "production" },
-      ),
-    ).toBe(
-      "https://bfa-sms-staging.nasalifya007.workers.dev/auth/reset-password",
-    );
+      getPasswordResetRedirectUrl(PORTAL_URL, { nodeEnv: "production" }),
+    ).toBe(`${PORTAL_URL}/auth/reset-password`);
   });
 
   it("rejects hardcoded localhost in production when no trusted origin", () => {
@@ -153,13 +173,24 @@ describe("site url helpers", () => {
     ).toBeNull();
   });
 
-  it("accepts staging forwarded headers", () => {
+  it("accepts forwarded headers for the configured portal host", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = PORTAL_URL;
     expect(
       originFromForwardedHeaders({
-        forwardedHost: "bfa-sms-staging.nasalifya007.workers.dev",
+        forwardedHost: "portal.blessedfaithacademy.com",
         forwardedProto: "https",
       }),
-    ).toBe("https://bfa-sms-staging.nasalifya007.workers.dev");
+    ).toBe(PORTAL_URL);
+  });
+
+  it("rejects forwarded headers for an unlisted deployment host", () => {
+    process.env.NEXT_PUBLIC_SITE_URL = PORTAL_URL;
+    expect(
+      originFromForwardedHeaders({
+        forwardedHost: LEGACY_WORKER_HOST,
+        forwardedProto: "https",
+      }),
+    ).toBeNull();
   });
 
   it("strips trailing slash from site url", () => {
@@ -171,9 +202,7 @@ describe("site url helpers", () => {
 
   it("detects localhost origins", () => {
     expect(isLocalhostOrigin("http://localhost:3000")).toBe(true);
-    expect(
-      isLocalhostOrigin("https://bfa-sms-staging.nasalifya007.workers.dev"),
-    ).toBe(false);
+    expect(isLocalhostOrigin(PORTAL_URL)).toBe(false);
   });
 
   it("blocks open redirects", () => {

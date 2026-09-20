@@ -305,6 +305,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
+          # Optional cutover allowlist (e.g. the old workers.dev hostname).
+          NEXT_PUBLIC_ADDITIONAL_TRUSTED_HOSTS: ${{ vars.ADDITIONAL_TRUSTED_HOSTS }}
           NEXT_PUBLIC_APP_VERSION: "0.1.0"
           NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
           NEXT_PUBLIC_BUILD_TIMESTAMP: ${{ github.run_started_at }}
@@ -344,6 +346,7 @@ jobs:
           VER_OUT: ${{ needs.verification.outputs.verification_result }}
           DEP: ${{ needs.deploy.result }}
           WORKER_VER: ${{ needs.deploy.outputs.worker_version }}
+          PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL }}
         run: |
           {
             echo "## Production deploy summary"
@@ -364,7 +367,7 @@ jobs:
             echo "| Deploy job | \`$DEP\` |"
             echo "| Worker name | \`bfa-sms-staging\` |"
             echo "| Promoted Worker version (100% traffic) | \`${WORKER_VER:-n/a}\` |"
-            echo "| Live URL | https://bfa-sms-staging.nasalifya007.workers.dev |"
+            echo "| Live URL | ${PUBLIC_APP_URL:-set repository variable PUBLIC_APP_URL} |"
             echo ""
             echo "Repository deploy command: \`npm run deploy\`"
             echo "(upload version + \`wrangler versions deploy <id>@100% --yes\`)"
