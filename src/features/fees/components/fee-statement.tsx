@@ -650,7 +650,7 @@ export function FeeStatement({
                               <>
                                 <div>
                                   <dt className="text-xs text-muted-foreground">
-                                    Balance before
+                                    Combined account before this receipt
                                   </dt>
                                   <dd className="tabular-nums">
                                     {formatKwacha(payment.snapshot.balanceBefore)}
@@ -658,7 +658,7 @@ export function FeeStatement({
                                 </div>
                                 <div>
                                   <dt className="text-xs text-muted-foreground">
-                                    Balance after
+                                    Combined account after this receipt
                                   </dt>
                                   <dd className="tabular-nums">
                                     {formatKwacha(payment.snapshot.balanceAfter)}
@@ -676,7 +676,7 @@ export function FeeStatement({
                                 </div>
                                 <div>
                                   <dt className="text-xs text-muted-foreground">
-                                    Outstanding after
+                                    Combined account after this receipt
                                   </dt>
                                   <dd className="tabular-nums">
                                     {formatKwacha(

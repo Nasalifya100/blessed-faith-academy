@@ -5,6 +5,7 @@ import {
   canBrowseStudents,
   canManageApplications,
 } from "@/features/auth/permissions";
+import { canOpenFinance } from "@/features/finance/capabilities";
 import { ROLE_LABELS } from "@/features/auth/types";
 import { canOpenGradebook } from "@/features/gradebook/permissions";
 import { canOpenReportCards } from "@/features/report-cards/permissions";
@@ -132,6 +133,9 @@ export default async function DashboardLayout({
       ? [{ href: "/dashboard/attendance", label: "Attendance" }]
       : []),
     ...(canSeeFees ? [{ href: "/dashboard/fees", label: "Fees" }] : []),
+    ...(canOpenFinance(current.profile?.role)
+      ? [{ href: "/dashboard/finance", label: "Finance" }]
+      : []),
     ...(canSeeExaminations
       ? [{ href: "/dashboard/examinations", label: "Examinations" }]
       : []),

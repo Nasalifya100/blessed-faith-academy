@@ -255,7 +255,8 @@ export async function recordPaymentAction(
     };
   }
 
-  const { data: rpcData, error } = await supabase.rpc("record_payment", {
+  const accountId = data.financialAccountId?.trim() ?? "";
+  const rpcArgs = {
     p_student_id: data.studentId,
     p_amount: data.amount,
     p_method: data.method,
@@ -263,7 +264,13 @@ export async function recordPaymentAction(
     p_reference_number: data.reference_number?.trim() ?? "",
     p_paid_on: data.paid_on,
     p_notes: data.notes?.trim() ?? "",
-  });
+  };
+  const { data: rpcData, error } = accountId
+    ? await supabase.rpc("record_payment_to_account", {
+        ...rpcArgs,
+        p_financial_account_id: accountId,
+      })
+    : await supabase.rpc("record_payment", rpcArgs);
 
   if (error) {
     return { error: error.message, paymentId: null };

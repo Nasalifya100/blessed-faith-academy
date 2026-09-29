@@ -80,6 +80,11 @@ export const recordPaymentSchema = z.object({
     .min(1, "Payment date is required")
     .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
   notes: z.string().optional().or(z.literal("")),
+  /**
+   * The physical account that received the money. Required once the school
+   * has financial accounts. Payment method is not a substitute for this.
+   */
+  financialAccountId: z.string().uuid().optional().or(z.literal("")),
   /** Required when the payment will create available credit. */
   confirmCredit: z.boolean().optional(),
 });

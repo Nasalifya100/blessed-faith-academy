@@ -31,10 +31,18 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+interface PaymentAccountOption {
+  id: string;
+  name: string;
+  defaultForMethod: string | null;
+}
+
 interface RecordPaymentFormProps {
   studentId: string;
-  /** Authoritative lifetime outstanding (all years). */
+  /** Combined student account outstanding (school fees plus additional charges). */
   outstandingBalance: number;
+  /** Active physical accounts. When present, the receipt must name one. */
+  accounts?: readonly PaymentAccountOption[];
   broughtForwardOutstanding?: number;
   currentYearOutstanding?: number;
   availableCredit?: number;
@@ -53,6 +61,7 @@ function RequiredMark() {
 
 export function RecordPaymentForm({
   studentId,
+  accounts = [],
   outstandingBalance,
   broughtForwardOutstanding = 0,
   currentYearOutstanding = 0,
@@ -79,6 +88,7 @@ export function RecordPaymentForm({
       reference_number: "",
       paid_on: today(),
       notes: "",
+      financialAccountId: "",
       confirmCredit: false,
     }),
     [studentId, idempotencyKey],
@@ -97,6 +107,10 @@ export function RecordPaymentForm({
 
   const watchedAmount = useWatch({ control, name: "amount" });
   const watchedMethod = useWatch({ control, name: "method" });
+  const requireAccount = accounts.length > 0;
+  const suggestedAccount = accounts.find(
+    (account) => account.defaultForMethod === watchedMethod,
+  );
   const watchedReference = useWatch({ control, name: "reference_number" });
   const watchedPaidOn = useWatch({ control, name: "paid_on" });
 
@@ -120,6 +134,7 @@ export function RecordPaymentForm({
       reference_number: "",
       paid_on: today(),
       notes: "",
+      financialAccountId: "",
       confirmCredit: false,
     });
     setServerError(null);
@@ -131,6 +146,12 @@ export function RecordPaymentForm({
     confirmCredit: boolean,
   ) {
     setServerError(null);
+    if (requireAccount && !values.financialAccountId) {
+      setServerError(
+        "Choose the account that received this money. The payment method is not enough.",
+      );
+      return;
+    }
     const result = await recordPaymentAction({
       ...values,
       amount: Number(values.amount),
@@ -176,7 +197,7 @@ export function RecordPaymentForm({
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="rounded-xl border bg-muted/20 px-3 py-2">
               <p className="text-xs text-muted-foreground">
-                Outstanding (all years)
+                Combined student account outstanding
               </p>
               <p
                 className={cn(
@@ -254,7 +275,7 @@ export function RecordPaymentForm({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">
-                  Outstanding (all years)
+                  Combined student account outstanding
                 </p>
                 <p className="text-sm font-semibold tabular-nums text-red-700 dark:text-red-300">
                   {formatKwacha(outstandingBalance)}
@@ -308,6 +329,30 @@ export function RecordPaymentForm({
                   </SelectNative>
                 </div>
 
+                {requireAccount ? (
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="financialAccountId">
+                      Account that received the money <RequiredMark />
+                    </Label>
+                    <SelectNative
+                      id="financialAccountId"
+                      {...register("financialAccountId")}
+                    >
+                      <option value="">Choose an account</option>
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </SelectNative>
+                    <p className="text-xs text-muted-foreground">
+                      {suggestedAccount
+                        ? `Payments by this method usually arrive in ${suggestedAccount.name}. Confirm that is the account which actually received the money.`
+                        : "Choose the bank, mobile money, or cash account that received this payment. The method alone is not recorded as the account."}
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="space-y-2">
                   <Label htmlFor="reference_number">
                     Reference (Airtel / bank slip no.)
@@ -360,7 +405,7 @@ export function RecordPaymentForm({
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">
-                    Outstanding charges
+                    Combined account outstanding
                   </dt>
                   <dd className="font-semibold tabular-nums">
                     {formatKwacha(outstandingBalance)}

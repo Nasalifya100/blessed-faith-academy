@@ -76,7 +76,7 @@ export default async function FeeBalancesReportPage({
       "Received",
       "Allocated",
       "Available credit",
-      "Outstanding",
+      "Combined account outstanding",
       "Brought forward",
       "Current year outstanding",
     ],
@@ -101,13 +101,16 @@ export default async function FeeBalancesReportPage({
     <PageShell>
       <PageHeader
         eyebrow="Reports"
-        title="Fee balances"
+        title="Combined student account balances"
         description={
           <>
             Blessed Faith Academy · academic year
             {report.academicYearName ? ` ${report.academicYearName}` : ""}.
-            Outstanding uses charge remainders after allocations. Gross
-            payments received are separate from available credit.
+            This outstanding figure is the combined student account: mandatory
+            school fees plus additional charges such as uniforms and meals. It
+            is not the mandatory school-fee balance on its own. Gross payments
+            received are separate from available credit. Historical receipt
+            snapshots are unchanged.
           </>
         }
         breadcrumb={

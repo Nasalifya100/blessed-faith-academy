@@ -198,7 +198,7 @@ export function StudentFinancialOverview({
         <Card className="shadow-sm">
           <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Outstanding balance
+              Combined student account outstanding
             </CardTitle>
             <span className="flex size-9 items-center justify-center rounded-xl bg-muted">
               <Wallet className="size-4 text-muted-foreground" aria-hidden />
@@ -216,8 +216,10 @@ export function StudentFinancialOverview({
               {formatKwacha(statement.balance)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              BF {formatKwacha(statement.broughtForwardOutstanding)} · Current
-              year {formatKwacha(statement.currentYearOutstanding)}
+              School fees plus additional charges such as uniforms and meals.
+              This is not the mandatory school-fee balance. BF{" "}
+              {formatKwacha(statement.broughtForwardOutstanding)} · Current year{" "}
+              {formatKwacha(statement.currentYearOutstanding)}
             </p>
           </CardContent>
         </Card>
@@ -316,7 +318,7 @@ export function StudentFinancialOverview({
             </div>
             <div className="text-right">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                Outstanding
+                Combined outstanding
               </p>
               <p
                 className={cn(

@@ -37,6 +37,11 @@ import { StudentAvatar } from "@/features/students/components/student-avatar";
 import { StudentTimeline } from "@/features/students/components/student-timeline";
 import { ArchiveStudentButton } from "@/features/students/components/archive-student-button";
 import { TransferStudentClassForm } from "@/features/students/components/transfer-student-class-form";
+import {
+  getFinancialAccounts,
+  getStudentFinanceBreakdown,
+} from "@/features/finance/queries";
+import { StudentFeeSplit } from "@/features/finance/components/student-fee-split";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
 import { OptionalFeesOptInForm } from "@/features/fees/components/optional-fees-opt-in-form";
@@ -159,6 +164,8 @@ export default async function StudentProfilePage({
     incidents,
     rules,
     yearClasses,
+    financeBreakdown,
+    paymentAccounts,
   ] = await Promise.all([
     getStudentProfile(id),
     getCurrentUser(),
@@ -169,6 +176,8 @@ export default async function StudentProfilePage({
     listStudentDisciplineIncidents(id),
     listSchoolRules({ activeOnly: true }),
     getCurrentYearClasses(),
+    getStudentFinanceBreakdown(id),
+    getFinancialAccounts(),
   ]);
 
   if (!student) {
@@ -514,6 +523,13 @@ export default async function StudentProfilePage({
               />
               <RecordPaymentForm
                 studentId={student.id}
+                accounts={paymentAccounts
+                  .filter((account) => account.isActive)
+                  .map((account) => ({
+                    id: account.id,
+                    name: account.name,
+                    defaultForMethod: account.defaultForMethod,
+                  }))}
                 outstandingBalance={statement.balance}
                 broughtForwardOutstanding={statement.broughtForwardOutstanding}
                 currentYearOutstanding={statement.currentYearOutstanding}
@@ -536,6 +552,9 @@ export default async function StudentProfilePage({
                 />
               </div>
             </section>
+          ) : null}
+          {financeBreakdown ? (
+            <StudentFeeSplit breakdown={financeBreakdown} />
           ) : null}
           <FeeStatement
             statement={statement}

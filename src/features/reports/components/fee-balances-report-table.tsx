@@ -68,7 +68,9 @@ export function FeeBalancesReportTable({ rows }: { rows: FeeBalanceRow[] }) {
               <TableHead className="text-right">Received</TableHead>
               <TableHead className="text-right">Allocated</TableHead>
               <TableHead className="text-right">Credit</TableHead>
-              <TableHead className="text-right">Outstanding</TableHead>
+              <TableHead className="text-right">
+                Combined account outstanding
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -169,7 +171,9 @@ export function FeeBalancesReportTable({ rows }: { rows: FeeBalanceRow[] }) {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Outstanding</dt>
+                  <dt className="text-xs text-muted-foreground">
+                    Combined account outstanding
+                  </dt>
                   <dd className="font-medium tabular-nums">
                     {formatKwacha(row.balance)}
                   </dd>

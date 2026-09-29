@@ -95,9 +95,9 @@ export default async function ReportsHubPage() {
     },
     canSeeFees
       ? {
-          name: "Fee Balances",
+          name: "Combined student accounts",
           description:
-            "Outstanding balances, charged totals, and students owing.",
+            "Combined outstanding (school fees plus additional charges), charged totals, and students owing. Not mandatory school fees alone.",
           href: "/dashboard/reports/fee-balances",
           icon: Wallet,
           meta: fees
