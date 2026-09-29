@@ -8,7 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
 
-import { recordFundIncomeAction } from "../actions";
+import { recordActivityIncomeAction, recordFundIncomeAction } from "../actions";
+import {
+  activityIncomeDescription,
+  type ContextualActivityCode,
+} from "../presentation";
 import type { FinanceFund, FinancialAccount } from "../types";
 
 function today(): string {
@@ -22,9 +26,21 @@ function today(): string {
 export function RecordIncomeForm({
   funds,
   accounts,
+  activityCode,
+  buttonLabel = "Record income",
+  submitLabel = "Save income",
+  formLabel = "Record income",
+  defaultDescription,
 }: {
   funds: readonly FinanceFund[];
   accounts: readonly FinancialAccount[];
+  /** Activity pages send a code. The server resolves the fund. */
+  activityCode?: ContextualActivityCode;
+  buttonLabel?: string;
+  submitLabel?: string;
+  formLabel?: string;
+  /** Used when the optional notes field is left blank. */
+  defaultDescription?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -41,16 +57,25 @@ export function RecordIncomeForm({
   function onSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const result = await recordFundIncomeAction({
-        fundId: String(formData.get("fundId") ?? ""),
+      const notes = String(formData.get("notes") ?? "");
+      const description = defaultDescription
+        ? activityIncomeDescription(notes, defaultDescription)
+        : String(formData.get("description") ?? "");
+      const shared = {
         accountId: String(formData.get("accountId") ?? ""),
         amount: Number(formData.get("amount") ?? 0),
         receivedOn: String(formData.get("receivedOn") ?? ""),
-        description: String(formData.get("description") ?? ""),
+        description,
         reference: String(formData.get("reference") ?? ""),
         payer: String(formData.get("payer") ?? ""),
         clientRequestId: requestId,
-      });
+      };
+      const result = activityCode
+        ? await recordActivityIncomeAction({ ...shared, activityCode })
+        : await recordFundIncomeAction({
+            ...shared,
+            fundId: String(formData.get("fundId") ?? ""),
+          });
       if (result.error) {
         setError(result.error);
         return;
@@ -66,45 +91,50 @@ export function RecordIncomeForm({
       <Button
         type="button"
         size="sm"
+        className="min-h-11"
         onClick={() => {
           setRequestId(crypto.randomUUID());
           setOpen(true);
         }}
       >
-        Record income
+        {buttonLabel}
       </Button>
     );
   }
 
+  const lockedFund = selectableFunds.find((fund) => fund.code === activityCode);
+
   return (
     <form
       action={onSubmit}
-      className="space-y-4 rounded-xl border bg-muted/20 p-4"
-      aria-label="Record income"
+      className="w-full space-y-4 rounded-xl border bg-muted/20 p-4"
+      aria-label={formLabel}
     >
       <p className="text-sm text-muted-foreground">
-        Use this for money the school receives outside student fee receipts.
-        School fee payments must be recorded against a student so a receipt is
-        issued.
+        {lockedFund
+          ? `This is ${lockedFund.name} income. Choose only where the money was received. Amounts are in Zambian kwacha.`
+          : "Use this for money the school receives outside student fee receipts. School fee payments must be recorded against a student so a receipt is issued. Amounts are in Zambian kwacha."}
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="income-fund">What is this money for?</Label>
-          <SelectNative id="income-fund" name="fundId" required>
-            <option value="">Choose a fund</option>
-            {selectableFunds.map((fund) => (
-              <option key={fund.id} value={fund.id}>
-                {fund.name}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
+        {lockedFund ? null : (
+          <div className="space-y-1.5">
+            <Label htmlFor="income-fund">What is this money for?</Label>
+            <SelectNative id="income-fund" name="fundId" required>
+              <option value="">Choose an activity</option>
+              {selectableFunds.map((fund) => (
+                <option key={fund.id} value={fund.id}>
+                  {fund.name}
+                </option>
+              ))}
+            </SelectNative>
+          </div>
+        )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="income-account">Where was it received?</Label>
-          <SelectNative id="income-account" name="accountId" required>
-            <option value="">Choose an account</option>
+          <Label htmlFor="income-account">Money received in</Label>
+          <SelectNative id="income-account" name="accountId" required className="h-11">
+            <option value="">Choose where the money is</option>
             {selectableAccounts.map((account) => (
               <option key={account.id} value={account.id}>
                 {account.name}
@@ -114,7 +144,7 @@ export function RecordIncomeForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="income-amount">Amount (K)</Label>
+          <Label htmlFor="income-amount">Amount (ZMW)</Label>
           <Input
             id="income-amount"
             name="amount"
@@ -122,6 +152,8 @@ export function RecordIncomeForm({
             inputMode="decimal"
             step="0.01"
             min="0.01"
+            placeholder="0.00"
+            className="min-h-11"
             required
           />
         </div>
@@ -137,24 +169,34 @@ export function RecordIncomeForm({
           />
         </div>
 
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="income-description">Description</Label>
-          <Input
-            id="income-description"
-            name="description"
-            placeholder="e.g. Tuck shop takings for the week"
-            required
-          />
-        </div>
+        {defaultDescription ? (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="income-notes">Notes (optional)</Label>
+            <Input id="income-notes" name="notes" className="min-h-11" />
+          </div>
+        ) : (
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="income-description">What was received?</Label>
+            <Input
+              id="income-description"
+              name="description"
+              placeholder="e.g. Hall hire for the weekend"
+              className="min-h-11"
+              required
+            />
+          </div>
+        )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="income-payer">Received from (optional)</Label>
-          <Input id="income-payer" name="payer" />
-        </div>
+        {defaultDescription ? null : (
+          <div className="space-y-1.5">
+            <Label htmlFor="income-payer">Received from (optional)</Label>
+            <Input id="income-payer" name="payer" className="min-h-11" />
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="income-reference">Reference (optional)</Label>
-          <Input id="income-reference" name="reference" />
+          <Input id="income-reference" name="reference" className="min-h-11" />
         </div>
       </div>
 
@@ -166,7 +208,7 @@ export function RecordIncomeForm({
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={isPending}>
-          {isPending ? "Saving…" : "Save income"}
+          {isPending ? "Saving…" : submitLabel}
         </Button>
         <Button
           type="button"

@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatKwacha } from "@/lib/money";
 
-import { ENTRY_TYPE_LABELS } from "../schemas";
+import { transactionStatusLabel } from "../presentation";
 import type { LedgerEntry } from "../types";
 
 function toneFor(entry: LedgerEntry): "default" | "secondary" | "destructive" {
@@ -26,11 +26,13 @@ export function TransactionTable({
   entries,
   showFund = true,
   showAccount = true,
+  accountHeading = "Account",
   emptyMessage = "No transactions recorded yet.",
 }: {
   entries: readonly LedgerEntry[];
   showFund?: boolean;
   showAccount?: boolean;
+  accountHeading?: string;
   emptyMessage?: string;
 }) {
   if (entries.length === 0) {
@@ -45,7 +47,7 @@ export function TransactionTable({
           <TableHead>Description</TableHead>
           <TableHead>Type</TableHead>
           {showFund ? <TableHead>Fund</TableHead> : null}
-          {showAccount ? <TableHead>Account</TableHead> : null}
+          {showAccount ? <TableHead>{accountHeading}</TableHead> : null}
           <TableHead className="text-right">Amount</TableHead>
         </TableRow>
       </TableHeader>
@@ -70,9 +72,7 @@ export function TransactionTable({
             </TableCell>
             <TableCell>
               <Badge variant={toneFor(entry)}>
-                {entry.isReversal
-                  ? `Reversal · ${ENTRY_TYPE_LABELS[entry.entryType]}`
-                  : ENTRY_TYPE_LABELS[entry.entryType]}
+                {transactionStatusLabel(entry)}
               </Badge>
             </TableCell>
             {showFund ? (

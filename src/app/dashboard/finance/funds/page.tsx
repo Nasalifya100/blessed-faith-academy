@@ -11,6 +11,7 @@ import {
   getFinancialAccounts,
   getFundPositions,
 } from "@/features/finance/queries";
+import { activityHref } from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { BackLink, PageHeader, PageShell } from "@/components/layout/page-shell";
 import {
@@ -95,7 +96,7 @@ export default async function FinanceFundsPage() {
                 <TableRow key={fund.id}>
                   <TableCell>
                     <Link
-                      href={`/dashboard/finance/funds/${fund.code.toLowerCase()}`}
+                      href={activityHref(fund.code)}
                       className="font-medium hover:underline"
                     >
                       {fund.name}

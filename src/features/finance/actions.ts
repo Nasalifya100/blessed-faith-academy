@@ -7,12 +7,20 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 import { hasFinanceCapability, type FinanceCapability } from "./capabilities";
 import {
+  contextualFundId,
+  primaryPettyCashAccount,
+} from "./presentation";
+import {
   approveExpenseSchema,
   approveSalarySchema,
   payExpenseSchema,
   paySalarySchema,
+  addPettyCashSchema,
+  recordActivityExpenseSchema,
+  recordActivityIncomeSchema,
   recordExpenseSchema,
   recordFundIncomeSchema,
+  recordPettyCashExpenseSchema,
   recordSalarySchema,
   recordTransferSchema,
   reverseExpenseSchema,
@@ -91,7 +99,97 @@ export async function recordFundIncomeAction(
   });
 
   if (error) return { error: error.message };
-  revalidateFinance(["/dashboard/finance/funds", "/dashboard/finance/accounts"]);
+  revalidateFinance([
+    "/dashboard/finance/funds",
+    "/dashboard/finance/accounts",
+    "/dashboard/finance/tuck-shop",
+    "/dashboard/finance/uniforms",
+    "/dashboard/finance/meals",
+  ]);
+  return { error: null };
+}
+
+async function resolveActivityFundId(
+  activityCode: string,
+): Promise<{ fundId: string } | { error: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("finance_funds")
+    .select("id, code, is_school_fees, is_active")
+    .eq("code", activityCode);
+  if (error) return { error: error.message };
+  const fundId = contextualFundId(
+    (data ?? []).map((row) => ({
+      id: String(row.id),
+      code: String(row.code),
+      isActive: Boolean(row.is_active),
+      isSchoolFees: Boolean(row.is_school_fees),
+    })),
+    activityCode,
+  );
+  if (!fundId) {
+    return { error: "That activity is not available for recording." };
+  }
+  return { fundId };
+}
+
+async function resolvePettyCashAccountId(): Promise<
+  { accountId: string } | { error: string }
+> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("financial_accounts")
+    .select("id, account_type, is_active, sort_order");
+  if (error) return { error: error.message };
+  const account = primaryPettyCashAccount(
+    (data ?? []).map((row) => ({
+      id: String(row.id),
+      accountType: String(row.account_type),
+      isActive: Boolean(row.is_active),
+      sortOrder: Number(row.sort_order ?? 0),
+    })),
+  );
+  if (!account) {
+    return { error: "No active petty cash account is available." };
+  }
+  return { accountId: account.id };
+}
+
+export async function recordActivityIncomeAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertCapability("FINANCE_LEDGER_RECORD");
+  if (!auth.ok) return { error: auth.error };
+
+  const parsed = recordActivityIncomeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? INVALID_INPUT };
+  }
+
+  const fund = await resolveActivityFundId(parsed.data.activityCode);
+  if ("error" in fund) return { error: fund.error };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("record_fund_income", {
+    p_fund_id: fund.fundId,
+    p_account_id: parsed.data.accountId,
+    p_amount: parsed.data.amount,
+    p_received_on: parsed.data.receivedOn,
+    p_description: parsed.data.description,
+    p_reference: emptyToNull(parsed.data.reference),
+    p_payer: emptyToNull(parsed.data.payer),
+    p_student_id: null,
+    p_client_request_id: parsed.data.clientRequestId,
+  });
+
+  if (error) return { error: error.message };
+  revalidateFinance([
+    "/dashboard/finance/funds",
+    "/dashboard/finance/accounts",
+    "/dashboard/finance/tuck-shop",
+    "/dashboard/finance/uniforms",
+    "/dashboard/finance/meals",
+  ]);
   return { error: null };
 }
 
@@ -147,6 +245,69 @@ export async function recordExpenseAction(
   if (error) return { error: error.message };
   revalidateFinance(["/dashboard/finance/expenses"]);
   return { error: null };
+}
+
+export async function recordActivityExpenseAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertCapability("FINANCE_EXPENSE_RECORD");
+  if (!auth.ok) return { error: auth.error };
+
+  const parsed = recordActivityExpenseSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? INVALID_INPUT };
+  }
+
+  const fund = await resolveActivityFundId(parsed.data.activityCode);
+  if ("error" in fund) return { error: fund.error };
+
+  return recordExpenseAction({
+    ...parsed.data,
+    fundId: fund.fundId,
+  });
+}
+
+export async function recordPettyCashExpenseAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertCapability("FINANCE_EXPENSE_RECORD");
+  if (!auth.ok) return { error: auth.error };
+
+  const parsed = recordPettyCashExpenseSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? INVALID_INPUT };
+  }
+
+  const account = await resolvePettyCashAccountId();
+  if ("error" in account) return { error: account.error };
+
+  return recordExpenseAction({
+    ...parsed.data,
+    accountId: account.accountId,
+  });
+}
+
+export async function addPettyCashAction(
+  input: unknown,
+): Promise<ActionResult> {
+  const auth = await assertCapability("FINANCE_TRANSFER_RECORD");
+  if (!auth.ok) return { error: auth.error };
+
+  const parsed = addPettyCashSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? INVALID_INPUT };
+  }
+
+  const account = await resolvePettyCashAccountId();
+  if ("error" in account) return { error: account.error };
+  if (account.accountId === parsed.data.fromAccountId) {
+    return { error: "Choose an account other than petty cash." };
+  }
+
+  return recordTransferAction({
+    ...parsed.data,
+    toAccountId: account.accountId,
+  });
 }
 
 export async function approveExpenseAction(

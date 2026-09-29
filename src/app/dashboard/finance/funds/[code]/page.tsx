@@ -39,6 +39,14 @@ export default async function FundDetailPage({
   }
 
   const { code } = await params;
+  const normalized = code.toUpperCase();
+  if (
+    normalized === "TUCK_SHOP" ||
+    normalized === "UNIFORMS" ||
+    normalized === "MEALS"
+  ) {
+    redirect(`/dashboard/finance/${normalized === "TUCK_SHOP" ? "tuck-shop" : normalized.toLowerCase()}`);
+  }
   const search = await searchParams;
   const from = firstValue(search.from) || null;
   const to = firstValue(search.to) || null;

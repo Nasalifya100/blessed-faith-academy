@@ -7,6 +7,10 @@ import { FinanceNav } from "@/features/finance/components/finance-nav";
 import { RecordTransferForm } from "@/features/finance/components/record-transfer-form";
 import { getFinancialAccountSummary } from "@/features/finance/queries";
 import { FINANCIAL_ACCOUNT_TYPE_LABELS } from "@/features/finance/schemas";
+import {
+  moneyHeldReady,
+  openingBalanceConfigured,
+} from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { BackLink, PageHeader, PageShell } from "@/components/layout/page-shell";
 import {
@@ -42,8 +46,8 @@ export default async function FinanceAccountsPage() {
     <PageShell width="wide">
       <PageHeader
         eyebrow="Finance"
-        title="Accounts"
-        description="Where the school's money is physically held. Each balance is the opening balance at the cutover date, plus later movements, plus receipts that name that account. A payment method is not an account."
+        title="Money held"
+        description="Where the school's money is physically held: bank, mobile money, and petty cash. These balances are not fund positions. A payment method is not an account."
         breadcrumb={<BackLink href="/dashboard/finance">Back to finance</BackLink>}
         actions={canTransfer ? <RecordTransferForm accounts={accounts} /> : null}
       />
@@ -73,7 +77,9 @@ export default async function FinanceAccountsPage() {
         <CardHeader>
           <CardTitle>Balances</CardTitle>
           <CardDescription>
-            Total held across active accounts: {formatKwacha(totalHeld)}
+            {moneyHeldReady(accounts)
+              ? `Total money held: ${formatKwacha(totalHeld)}`
+              : "Opening balance required on every active account before a total is shown."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -110,16 +116,22 @@ export default async function FinanceAccountsPage() {
                     {account.maskedReference ?? "—"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {formatKwacha(account.openingBalance)}
+                    {openingBalanceConfigured(account)
+                      ? formatKwacha(account.openingBalance)
+                      : "Opening balance required"}
                   </TableCell>
                   <TableCell
                     className={
-                      account.currentBalance >= 0
-                        ? "text-right tabular-nums"
-                        : "text-right tabular-nums text-red-700 dark:text-red-300"
+                      !openingBalanceConfigured(account)
+                        ? "text-right text-muted-foreground"
+                        : account.currentBalance >= 0
+                          ? "text-right tabular-nums"
+                          : "text-right tabular-nums text-red-700 dark:text-red-300"
                     }
                   >
-                    {formatKwacha(account.currentBalance)}
+                    {openingBalanceConfigured(account)
+                      ? formatKwacha(account.currentBalance)
+                      : "Opening balance required"}
                   </TableCell>
                 </TableRow>
               ))}

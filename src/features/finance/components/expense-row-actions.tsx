@@ -94,7 +94,7 @@ export function ExpenseRowActions({
             disabled={isPending}
             onClick={() => setPayOpen((value) => !value)}
           >
-            Mark as paid
+            Pay
           </Button>
         ) : null}
 

@@ -16,6 +16,7 @@ import type { ExpenseStatus } from "@/features/finance/types";
 import { formatKwacha } from "@/lib/money";
 import { BackLink, PageHeader, PageShell } from "@/components/layout/page-shell";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Card,
   CardContent,
@@ -93,9 +94,10 @@ export default async function FinanceExpensesPage() {
         </CardHeader>
         <CardContent>
           {expenses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No expenses recorded yet.
-            </p>
+            <EmptyState
+              title="No expenses recorded yet."
+              description="Use Record Expense. An expense is approved, then paid. Nothing is deleted — a mistake is reversed, and the original stays in the history."
+            />
           ) : (
             <Table>
               <TableHeader>

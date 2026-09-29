@@ -167,6 +167,48 @@ export const recordTransferSchema = z
 
 export type RecordTransferInput = z.infer<typeof recordTransferSchema>;
 
+const contextualActivityCode = z.enum(["UNIFORMS", "MEALS", "TUCK_SHOP"]);
+
+/** Contextual income. The fund is not accepted from the browser. */
+export const recordActivityIncomeSchema = z.object({
+  activityCode: contextualActivityCode,
+  accountId: z.string().uuid("Choose where the money was received"),
+  amount: moneyAmount,
+  receivedOn: isoDate,
+  description: z
+    .string()
+    .trim()
+    .min(3, "Describe what this money is for")
+    .max(300),
+  reference: optionalText,
+  payer: optionalText,
+  clientRequestId: z.string().uuid("A request id is required"),
+});
+
+/** Contextual expense. The fund is not accepted from the browser. */
+export const recordActivityExpenseSchema = recordExpenseSchema
+  .omit({ fundId: true })
+  .extend({ activityCode: contextualActivityCode });
+
+/** Petty-cash spend. The paying account is not accepted from the browser. */
+export const recordPettyCashExpenseSchema = recordExpenseSchema.omit({
+  accountId: true,
+});
+
+/** Petty-cash top-up. The destination account is not accepted from the browser. */
+export const addPettyCashSchema = z.object({
+  fromAccountId: z.string().uuid("Choose the account the money leaves"),
+  amount: moneyAmount,
+  transferDate: isoDate,
+  description: z
+    .string()
+    .trim()
+    .min(3, "Describe why the money is being moved")
+    .max(300),
+  reference: optionalText,
+  clientRequestId: z.string().uuid("A request id is required"),
+});
+
 export const reverseTransferSchema = z.object({
   transferId: z.string().uuid(),
   reason: reversalReason,

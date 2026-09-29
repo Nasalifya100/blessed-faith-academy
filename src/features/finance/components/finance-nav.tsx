@@ -4,57 +4,7 @@ import type { StaffRole } from "@/features/auth/types";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { hasFinanceCapability, type FinanceCapability } from "../capabilities";
-
-interface FinanceNavItem {
-  href: string;
-  label: string;
-  capability: FinanceCapability;
-}
-
-const ITEMS: FinanceNavItem[] = [
-  { href: "/dashboard/finance", label: "Overview", capability: "FINANCE_VIEW" },
-  {
-    href: "/dashboard/fees",
-    label: "School Fees",
-    capability: "FINANCE_VIEW",
-  },
-  {
-    href: "/dashboard/finance/funds",
-    label: "Funds",
-    capability: "FINANCE_FUNDS_VIEW",
-  },
-  {
-    href: "/dashboard/finance/expenses",
-    label: "Expenses",
-    capability: "FINANCE_EXPENSE_RECORD",
-  },
-  {
-    href: "/dashboard/finance/petty-cash",
-    label: "Petty Cash",
-    capability: "FINANCE_ACCOUNTS_VIEW",
-  },
-  {
-    href: "/dashboard/finance/salaries",
-    label: "Salaries",
-    capability: "FINANCE_SALARY_VIEW",
-  },
-  {
-    href: "/dashboard/finance/accounts",
-    label: "Accounts",
-    capability: "FINANCE_ACCOUNTS_VIEW",
-  },
-  {
-    href: "/dashboard/finance/transfers",
-    label: "Transfers",
-    capability: "FINANCE_ACCOUNTS_VIEW",
-  },
-  {
-    href: "/dashboard/finance/reports",
-    label: "Reports",
-    capability: "FINANCE_REPORTS_VIEW",
-  },
-];
+import { financeNavItems } from "../presentation";
 
 export function FinanceNav({
   role,
@@ -63,9 +13,7 @@ export function FinanceNav({
   role: StaffRole | null | undefined;
   current: string;
 }) {
-  const visible = ITEMS.filter((item) =>
-    hasFinanceCapability(role, item.capability),
-  );
+  const visible = financeNavItems(role);
 
   return (
     <nav
@@ -84,7 +32,7 @@ export function FinanceNav({
                 variant: isCurrent ? "default" : "outline",
                 size: "sm",
               }),
-              "min-h-10",
+              "min-h-11 px-3",
             )}
           >
             {item.label}

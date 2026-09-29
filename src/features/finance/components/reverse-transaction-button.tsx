@@ -68,6 +68,9 @@ export function ReverseTransactionButton({
       aria-label={`Confirm reversal of ${label}`}
     >
       <p className="text-xs text-muted-foreground">{description}</p>
+      <p className="text-xs font-medium">
+        The original record will remain in the audit history.
+      </p>
       <div className="space-y-1.5">
         <Label htmlFor={`reverse-reason-${id}`} className="text-xs">
           Reason <span className="text-destructive">*</span>

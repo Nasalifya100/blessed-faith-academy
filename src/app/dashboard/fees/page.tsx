@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { getCurrentUser } from "@/features/auth/queries/current-user";
+import { canOpenFinance } from "@/features/finance/capabilities";
+import { FinanceNav } from "@/features/finance/components/finance-nav";
 import { getFeesSetupData } from "@/features/fees/queries";
 import { getFeeBalancesReport } from "@/features/reports/queries";
 import { getCurrentYearClasses } from "@/features/students/queries";
@@ -291,9 +293,13 @@ export default async function FeesPage() {
       <PageHeader
         eyebrow="Finance"
         title="Fees & payments"
-        description="Overview of outstanding balances, collections, and the fee catalogue."
+        description="Mandatory school-fee charges and receipts. This page is not the combined student account: uniforms, meals, and tuck shop are recorded on their own Finance pages and do not change a mandatory school-fee balance unless that charge is itself configured as a school fee."
         breadcrumb={<BackLink href="/dashboard">Back to dashboard</BackLink>}
       />
+
+      {canOpenFinance(role) ? (
+        <FinanceNav role={role} current="/dashboard/fees" />
+      ) : null}
 
       <Suspense fallback={<FeesPageSkeleton />}>
         <FeesDashboardBody canEdit={canEdit} isAdmin={isAdmin} />

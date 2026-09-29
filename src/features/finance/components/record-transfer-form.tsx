@@ -9,7 +9,11 @@ import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
 import { formatKwacha } from "@/lib/money";
 
-import { recordTransferAction } from "../actions";
+import { addPettyCashAction, recordTransferAction } from "../actions";
+import {
+  openingBalanceConfigured,
+  primaryPettyCashAccount,
+} from "../presentation";
 import type { FinancialAccount } from "../types";
 
 function today(): string {
@@ -18,8 +22,17 @@ function today(): string {
 
 export function RecordTransferForm({
   accounts,
+  pettyCashTopUp = false,
+  buttonLabel = "Move money between accounts",
+  submitLabel = "Record transfer",
+  defaultDescription = "",
 }: {
   accounts: readonly FinancialAccount[];
+  /** The server chooses the active petty-cash account as the destination. */
+  pettyCashTopUp?: boolean;
+  buttonLabel?: string;
+  submitLabel?: string;
+  defaultDescription?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -32,15 +45,21 @@ export function RecordTransferForm({
   function onSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
-      const result = await recordTransferAction({
+      const shared = {
         fromAccountId: String(formData.get("fromAccountId") ?? ""),
-        toAccountId: String(formData.get("toAccountId") ?? ""),
         amount: Number(formData.get("amount") ?? 0),
         transferDate: String(formData.get("transferDate") ?? ""),
-        description: String(formData.get("description") ?? ""),
+        description:
+          String(formData.get("description") ?? "") || defaultDescription,
         reference: String(formData.get("reference") ?? ""),
         clientRequestId: requestId,
-      });
+      };
+      const result = pettyCashTopUp
+        ? await addPettyCashAction(shared)
+        : await recordTransferAction({
+            ...shared,
+            toAccountId: String(formData.get("toAccountId") ?? ""),
+          });
       if (result.error) {
         setError(result.error);
         return;
@@ -56,57 +75,76 @@ export function RecordTransferForm({
       <Button
         type="button"
         size="sm"
+        className="min-h-11"
         onClick={() => {
           setRequestId(crypto.randomUUID());
           setOpen(true);
         }}
       >
-        Move money between accounts
+        {buttonLabel}
       </Button>
     );
+  }
+
+  const destination = pettyCashTopUp
+    ? primaryPettyCashAccount(activeAccounts)
+    : null;
+  const sourceAccounts = destination
+    ? activeAccounts.filter((account) => account.id !== destination.id)
+    : activeAccounts;
+
+  function balanceLabel(account: FinancialAccount): string {
+    return openingBalanceConfigured(account)
+      ? formatKwacha(account.currentBalance)
+      : "opening balance required";
   }
 
   return (
     <form
       action={onSubmit}
-      className="space-y-4 rounded-xl border bg-muted/20 p-4"
-      aria-label="Transfer between accounts"
+      className="w-full space-y-4 rounded-xl border bg-muted/20 p-4"
+      aria-label={destination ? "Add money to petty cash" : "Transfer between accounts"}
     >
       <p className="text-sm text-muted-foreground">
-        A transfer moves money the school already has from one place to
-        another. It is <strong>not</strong> income and <strong>not</strong> an
-        expense, so it will not appear in either total. A transfer is still
-        recorded if it takes an account below zero; the shortfall is shown on
-        that account.
+        {destination
+          ? `This moves money the school already holds into ${destination.name}. It is not income and it is not an expense. Amounts are in Zambian kwacha.`
+          : "A transfer moves money the school already has from one place to another. It is not income and not an expense. Amounts are in Zambian kwacha."}
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="transfer-from">From</Label>
-          <SelectNative id="transfer-from" name="fromAccountId" required>
+          <SelectNative id="transfer-from" name="fromAccountId" required className="h-11">
             <option value="">Choose an account</option>
-            {activeAccounts.map((account) => (
+            {sourceAccounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.name} · {formatKwacha(account.currentBalance)}
+                {account.name} · {balanceLabel(account)}
               </option>
             ))}
           </SelectNative>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="transfer-to">To</Label>
-          <SelectNative id="transfer-to" name="toAccountId" required>
-            <option value="">Choose an account</option>
-            {activeAccounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name} · {formatKwacha(account.currentBalance)}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
+        {destination ? (
+          <div className="space-y-1.5">
+            <Label>Into</Label>
+            <p className="text-sm font-medium">{destination.name}</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="transfer-to">To</Label>
+            <SelectNative id="transfer-to" name="toAccountId" required className="h-11">
+              <option value="">Choose an account</option>
+              {activeAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name} · {balanceLabel(account)}
+                </option>
+              ))}
+            </SelectNative>
+          </div>
+        )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="transfer-amount">Amount (K)</Label>
+          <Label htmlFor="transfer-amount">Amount (ZMW)</Label>
           <Input
             id="transfer-amount"
             name="amount"
@@ -135,6 +173,7 @@ export function RecordTransferForm({
             id="transfer-description"
             name="description"
             placeholder="e.g. Petty cash top-up for the month"
+            defaultValue={defaultDescription}
             required
           />
         </div>
@@ -153,7 +192,7 @@ export function RecordTransferForm({
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={isPending}>
-          {isPending ? "Moving…" : "Record transfer"}
+          {isPending ? "Saving…" : submitLabel}
         </Button>
         <Button
           type="button"

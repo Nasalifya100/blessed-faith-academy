@@ -19,6 +19,7 @@ import {
   getFinanceOverview,
   getLedgerEntries,
 } from "@/features/finance/queries";
+import { activityHref, moneyHeldReady, openingBalanceConfigured } from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { PageHeader, PageShell, SectionHeading } from "@/components/layout/page-shell";
 import {
@@ -115,7 +116,7 @@ export default async function FinanceOverviewPage({
         <StatCard
           title="Net position"
           value={formatKwacha(netPosition)}
-          hint="Income less expenditure"
+          hint="Income less expenditure. This is not cash in the bank."
           icon={Banknote}
           tone={netPosition >= 0 ? "success" : "danger"}
         />
@@ -132,8 +133,16 @@ export default async function FinanceOverviewPage({
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <StatCard
             title="Money held"
-            value={formatKwacha(overview.totalHeld)}
-            hint="Across all active accounts"
+            value={
+              moneyHeldReady(overview.accounts)
+                ? formatKwacha(overview.totalHeld)
+                : "Opening balance required"
+            }
+            hint={
+              moneyHeldReady(overview.accounts)
+                ? "Across bank, mobile money, and petty cash"
+                : "Set each account's opening balance before trusting a total"
+            }
             icon={Landmark}
             href="/dashboard/finance/accounts"
           />
@@ -158,16 +167,16 @@ export default async function FinanceOverviewPage({
       {overview.funds.length > 0 ? (
         <Card className="shadow-sm">
           <CardHeader>
-            <CardTitle>Income by fund</CardTitle>
+            <CardTitle>Income by activity</CardTitle>
             <CardDescription>
-              What each school activity brought in and what it cost to run.
+              What each activity brought in and what it cost. This is not where the cash is kept.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fund</TableHead>
+                  <TableHead>Activity</TableHead>
                   <TableHead className="text-right">Income</TableHead>
                   <TableHead className="text-right">Expenditure</TableHead>
                   <TableHead className="text-right">Net</TableHead>
@@ -180,7 +189,7 @@ export default async function FinanceOverviewPage({
                     <TableRow key={fund.id}>
                       <TableCell>
                         <Link
-                          href={`/dashboard/finance/funds/${fund.code.toLowerCase()}`}
+                          href={activityHref(fund.code)}
                           className="font-medium hover:underline"
                         >
                           {fund.name}
@@ -244,7 +253,9 @@ export default async function FinanceOverviewPage({
                         {account.accountType.replace("_", " ")}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatKwacha(account.currentBalance)}
+                        {openingBalanceConfigured(account)
+                          ? formatKwacha(account.currentBalance)
+                          : "Opening balance required"}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -4,12 +4,20 @@ import { Coins } from "lucide-react";
 import { getCurrentUser } from "@/features/auth/queries/current-user";
 import { hasFinanceCapability } from "@/features/finance/capabilities";
 import { FinanceNav } from "@/features/finance/components/finance-nav";
+import { RecordExpenseForm } from "@/features/finance/components/record-expense-form";
 import { RecordTransferForm } from "@/features/finance/components/record-transfer-form";
 import { TransactionTable } from "@/features/finance/components/transaction-table";
 import {
+  getExpenseCategories,
   getFinancialAccounts,
+  getFunds,
   getLedgerEntries,
 } from "@/features/finance/queries";
+import {
+  moneyHeldReady,
+  openingBalanceConfigured,
+  primaryPettyCashAccount,
+} from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { BackLink, PageHeader, PageShell } from "@/components/layout/page-shell";
 import {
@@ -29,11 +37,17 @@ export default async function PettyCashPage() {
     redirect("/dashboard");
   }
 
-  const accounts = await getFinancialAccounts();
+  const canTransfer = hasFinanceCapability(role, "FINANCE_TRANSFER_RECORD");
+  const canRecordExpense = hasFinanceCapability(role, "FINANCE_EXPENSE_RECORD");
+
+  const [accounts, funds, categories] = await Promise.all([
+    getFinancialAccounts(),
+    canRecordExpense ? getFunds() : Promise.resolve([]),
+    canRecordExpense ? getExpenseCategories() : Promise.resolve([]),
+  ]);
   const pettyCash = accounts.filter(
     (account) => account.accountType === "petty_cash",
   );
-  const canTransfer = hasFinanceCapability(role, "FINANCE_TRANSFER_RECORD");
 
   if (pettyCash.length === 0) {
     return (
@@ -48,20 +62,21 @@ export default async function PettyCashPage() {
         <FinanceNav role={role} current="/dashboard/finance/petty-cash" />
         <EmptyState
           title="No petty cash account"
-          description="Ask an administrator to create a petty cash account in Finance settings."
+          description="An administrator needs to create the petty cash account before cash can be recorded."
           icon={<Coins className="size-6 text-muted-foreground" aria-hidden />}
         />
       </PageShell>
     );
   }
 
+  const primary = primaryPettyCashAccount(pettyCash) ?? pettyCash[0];
   const entriesByAccount = await Promise.all(
     pettyCash.map(async (account) => ({
       account,
       entries: await getLedgerEntries({ accountId: account.id, limit: 200 }),
     })),
   );
-
+  const balanceReady = moneyHeldReady(pettyCash);
   const totalFloat = pettyCash
     .filter((account) => account.isActive)
     .reduce((sum, account) => sum + account.currentBalance, 0);
@@ -71,46 +86,86 @@ export default async function PettyCashPage() {
       <PageHeader
         eyebrow="Finance"
         title="Petty cash"
-        description="The small cash float held at the school. Topping it up from the bank is a transfer, not an expense — the money only becomes expenditure when it is actually spent."
+        description="Cash held at the school. Adding money from the bank or mobile money is a transfer: income stays K0 and expenses stay K0. Spending the cash is an expense."
         breadcrumb={<BackLink href="/dashboard/finance">Back to finance</BackLink>}
-        actions={canTransfer ? <RecordTransferForm accounts={accounts} /> : null}
       />
 
       <FinanceNav role={role} current="/dashboard/finance/petty-cash" />
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        {canTransfer ? (
+          <RecordTransferForm
+            accounts={accounts}
+            pettyCashTopUp
+            buttonLabel="Add money"
+            submitLabel="Add money"
+            defaultDescription="Petty cash top-up"
+          />
+        ) : null}
+        {canRecordExpense ? (
+          <RecordExpenseForm
+            categories={categories}
+            funds={funds}
+            accounts={accounts}
+            pettyCash
+            buttonLabel="Record Expense"
+            submitLabel="Record Expense"
+            formLabel="Petty cash expense"
+          />
+        ) : null}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          title="Cash on hand"
-          value={formatKwacha(totalFloat)}
-          hint="Across all petty cash accounts"
+          title="Current petty cash balance"
+          value={
+            balanceReady ? formatKwacha(totalFloat) : "Opening balance required"
+          }
+          hint={
+            openingBalanceConfigured(primary)
+              ? primary.name
+              : "Set the opening balance before treating this as cash on hand"
+          }
           icon={Coins}
-          tone={totalFloat >= 0 ? "default" : "danger"}
+          tone={balanceReady && totalFloat < 0 ? "danger" : "default"}
         />
       </div>
 
       {entriesByAccount.map(({ account, entries }) => {
-        const toppedUp = entries
-          .filter((entry) => entry.entryType === "transfer_in")
-          .reduce((sum, entry) => sum + entry.accountDelta, 0);
-        const spent = entries
-          .filter((entry) => entry.entryType === "expense")
-          .reduce((sum, entry) => sum + Math.abs(entry.accountDelta), 0);
+        const moneyIn = entries
+          .filter((entry) => entry.entryType === "transfer_in" && !entry.reversedAt)
+          .reduce((sum, entry) => sum + entry.amount, 0);
+        const moneyOut = entries
+          .filter((entry) => entry.entryType === "expense" && !entry.reversedAt)
+          .reduce((sum, entry) => sum + entry.amount, 0);
 
         return (
           <Card key={account.id} className="shadow-sm">
             <CardHeader>
               <CardTitle>{account.name}</CardTitle>
               <CardDescription>
-                Balance {formatKwacha(account.currentBalance)} ·{" "}
-                {formatKwacha(toppedUp)} topped up · {formatKwacha(spent)} spent
+                {openingBalanceConfigured(account)
+                  ? `Balance ${formatKwacha(account.currentBalance)}`
+                  : "Opening balance required"}
+                {" · "}
+                Money in {formatKwacha(moneyIn)}
+                {" · "}
+                Money out {formatKwacha(moneyOut)}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <TransactionTable
-                entries={entries}
-                showAccount={false}
-                emptyMessage="No petty cash movements recorded yet."
-              />
+              {entries.length === 0 ? (
+                <EmptyState
+                  title="No petty cash movements yet."
+                  description="Add money from the bank, or record an expense paid from this cash."
+                />
+              ) : (
+                <TransactionTable
+                  entries={entries}
+                  showAccount={false}
+                  emptyMessage="No petty cash movements recorded yet."
+                />
+              )}
             </CardContent>
           </Card>
         );

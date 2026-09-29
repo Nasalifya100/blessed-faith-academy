@@ -8,7 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
 
-import { recordExpenseAction } from "../actions";
+import {
+  recordActivityExpenseAction,
+  recordExpenseAction,
+  recordPettyCashExpenseAction,
+} from "../actions";
+import {
+  primaryPettyCashAccount,
+  suggestedCategoryId,
+  type ContextualActivityCode,
+} from "../presentation";
 import { DISBURSEMENT_METHODS, DISBURSEMENT_METHOD_LABELS } from "../schemas";
 import type { ExpenseCategory, FinanceFund, FinancialAccount } from "../types";
 
@@ -20,16 +29,33 @@ export function RecordExpenseForm({
   categories,
   funds,
   accounts,
+  activityCode,
+  pettyCash = false,
+  suggestedCategoryCode,
+  buttonLabel = "Record Expense",
+  submitLabel = "Record Expense",
+  formLabel = "Record expense",
 }: {
   categories: readonly ExpenseCategory[];
   funds: readonly FinanceFund[];
   accounts: readonly FinancialAccount[];
+  activityCode?: ContextualActivityCode;
+  /** The server chooses the active petty-cash account. */
+  pettyCash?: boolean;
+  suggestedCategoryCode?: string;
+  buttonLabel?: string;
+  submitLabel?: string;
+  formLabel?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState(() =>
+    suggestedCategoryCode
+      ? suggestedCategoryId(categories, suggestedCategoryCode)
+      : "",
+  );
   const [isPending, startTransition] = useTransition();
 
   // Salary categories are handled by the Salaries area so pay-period
@@ -48,10 +74,8 @@ export function RecordExpenseForm({
     setError(null);
     startTransition(async () => {
       const method = String(formData.get("paymentMethod") ?? "");
-      const result = await recordExpenseAction({
+      const shared = {
         categoryId: String(formData.get("categoryId") ?? ""),
-        fundId: String(formData.get("fundId") ?? ""),
-        accountId: String(formData.get("accountId") ?? ""),
         amount: Number(formData.get("amount") ?? 0),
         expenseDate: String(formData.get("expenseDate") ?? ""),
         description: String(formData.get("description") ?? ""),
@@ -61,7 +85,23 @@ export function RecordExpenseForm({
         documentReference: String(formData.get("documentReference") ?? ""),
         notes: String(formData.get("notes") ?? ""),
         clientRequestId: requestId,
-      });
+      };
+      const result = activityCode
+        ? await recordActivityExpenseAction({
+            ...shared,
+            activityCode,
+            accountId: String(formData.get("accountId") ?? ""),
+          })
+        : pettyCash
+          ? await recordPettyCashExpenseAction({
+              ...shared,
+              fundId: String(formData.get("fundId") ?? ""),
+            })
+          : await recordExpenseAction({
+              ...shared,
+              fundId: String(formData.get("fundId") ?? ""),
+              accountId: String(formData.get("accountId") ?? ""),
+            });
       if (result.error) {
         setError(result.error);
         return;
@@ -78,25 +118,32 @@ export function RecordExpenseForm({
       <Button
         type="button"
         size="sm"
+        className="min-h-11"
         onClick={() => {
           setRequestId(crypto.randomUUID());
           setOpen(true);
         }}
       >
-        Record expense
+        {buttonLabel}
       </Button>
     );
   }
 
+  const lockedFund = activeFunds.find((fund) => fund.code === activityCode);
+  const lockedAccount = pettyCash
+    ? primaryPettyCashAccount(activeAccounts)
+    : null;
+
   return (
     <form
       action={onSubmit}
-      className="space-y-4 rounded-xl border bg-muted/20 p-4"
-      aria-label="Record expense"
+      className="w-full space-y-4 rounded-xl border bg-muted/20 p-4"
+      aria-label={formLabel}
     >
       <p className="text-sm text-muted-foreground">
-        Recording an expense does not move money yet. It is approved first,
-        then paid — and only payment reduces an account balance.
+        {lockedFund
+          ? `This expense is for ${lockedFund.name}. Recording this expense does not move money until it is approved and paid.`
+          : "Recording this expense does not move money until it is approved and paid. Amounts are in Zambian kwacha."}
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -106,6 +153,7 @@ export function RecordExpenseForm({
             id="expense-category"
             name="categoryId"
             required
+            className="h-11"
             value={categoryId}
             onChange={(event) => setCategoryId(event.target.value)}
           >
@@ -118,27 +166,36 @@ export function RecordExpenseForm({
           </SelectNative>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="expense-fund">Which activity bears the cost?</Label>
-          <SelectNative
-            id="expense-fund"
-            name="fundId"
-            required
-            key={suggestedFundId}
-            defaultValue={suggestedFundId}
-          >
-            <option value="">Choose a fund</option>
-            {activeFunds.map((fund) => (
-              <option key={fund.id} value={fund.id}>
-                {fund.name}
-              </option>
-            ))}
-          </SelectNative>
-        </div>
+        {lockedFund ? null : (
+          <div className="space-y-1.5">
+            <Label htmlFor="expense-fund">What was this for?</Label>
+            <SelectNative
+              id="expense-fund"
+              name="fundId"
+              required
+              className="h-11"
+              key={suggestedFundId}
+              defaultValue={suggestedFundId}
+            >
+              <option value="">Choose an activity</option>
+              {activeFunds.map((fund) => (
+                <option key={fund.id} value={fund.id}>
+                  {fund.name}
+                </option>
+              ))}
+            </SelectNative>
+          </div>
+        )}
 
+        {lockedAccount ? (
+          <div className="space-y-1.5">
+            <Label>Paid from</Label>
+            <p className="text-sm font-medium">{lockedAccount.name}</p>
+          </div>
+        ) : (
         <div className="space-y-1.5">
-          <Label htmlFor="expense-account">Which account will pay?</Label>
-          <SelectNative id="expense-account" name="accountId" required>
+          <Label htmlFor="expense-account">Paid from</Label>
+          <SelectNative id="expense-account" name="accountId" required className="h-11">
             <option value="">Choose an account</option>
             {activeAccounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -147,9 +204,10 @@ export function RecordExpenseForm({
             ))}
           </SelectNative>
         </div>
+        )}
 
         <div className="space-y-1.5">
-          <Label htmlFor="expense-amount">Amount (K)</Label>
+          <Label htmlFor="expense-amount">Amount (ZMW)</Label>
           <Input
             id="expense-amount"
             name="amount"
@@ -185,7 +243,7 @@ export function RecordExpenseForm({
         </div>
 
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="expense-description">Description</Label>
+          <Label htmlFor="expense-description">What was bought or paid for?</Label>
           <Input
             id="expense-description"
             name="description"
@@ -195,7 +253,7 @@ export function RecordExpenseForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="expense-payee">Paid to (optional)</Label>
+          <Label htmlFor="expense-payee">Supplier (optional)</Label>
           <Input id="expense-payee" name="payee" />
         </div>
 
@@ -225,7 +283,7 @@ export function RecordExpenseForm({
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={isPending}>
-          {isPending ? "Saving…" : "Save expense"}
+          {isPending ? "Saving…" : submitLabel}
         </Button>
         <Button
           type="button"
