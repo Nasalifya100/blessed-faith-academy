@@ -71,6 +71,140 @@ describe("physical account cutover does not double-count", () => {
     expect(balance).toBe(0);
   });
 
+  it("keeps a same-day receipt inside the end-of-day opening balance", () => {
+    expect(
+      physicalAccountBalance({
+        accountId: BANK,
+        openingBalance: 20000,
+        openingBalanceDate: "2026-09-30",
+        ledger: [],
+        receipts: [
+          {
+            paidOn: "2026-09-30",
+            amount: 1000,
+            accountId: BANK,
+            status: "completed",
+          },
+        ],
+      }),
+    ).toBe(20000);
+  });
+
+  it("adds a receipt dated the day after cutover", () => {
+    expect(
+      physicalAccountBalance({
+        accountId: BANK,
+        openingBalance: 20000,
+        openingBalanceDate: "2026-09-30",
+        ledger: [],
+        receipts: [
+          {
+            paidOn: "2026-10-01",
+            amount: 1000,
+            accountId: BANK,
+            status: "completed",
+          },
+        ],
+      }),
+    ).toBe(21000);
+  });
+
+  it("moves cash on a transfer without calling it income or expenditure", () => {
+    const bank = physicalAccountBalance({
+      accountId: BANK,
+      openingBalance: 20000,
+      openingBalanceDate: "2026-09-30",
+      ledger: [{ entryDate: "2026-10-01", accountDelta: -3000 }],
+      receipts: [],
+    });
+    const petty = physicalAccountBalance({
+      accountId: PETTY,
+      openingBalance: 500,
+      openingBalanceDate: "2026-09-30",
+      ledger: [{ entryDate: "2026-10-01", accountDelta: 3000 }],
+      receipts: [],
+    });
+    const movement = summariseEntries([
+      { entryType: "transfer_out", direction: "out", amount: 3000 },
+      { entryType: "transfer_in", direction: "in", amount: 3000 },
+    ]);
+    expect(bank).toBe(17000);
+    expect(petty).toBe(3500);
+    expect(movement.income).toBe(0);
+    expect(movement.expenditure).toBe(0);
+  });
+
+  it("reduces petty cash by a later expense and counts that expense", () => {
+    const petty = physicalAccountBalance({
+      accountId: PETTY,
+      openingBalance: 500,
+      openingBalanceDate: "2026-09-30",
+      ledger: [{ entryDate: "2026-10-01", accountDelta: -200 }],
+      receipts: [],
+    });
+    const movement = summariseEntries([
+      { entryType: "expense", direction: "out", amount: 200 },
+    ]);
+    expect(petty).toBe(300);
+    expect(movement.expenditure).toBe(200);
+    expect(movement.income).toBe(0);
+  });
+
+  it("leaves an unattributed receipt out of every physical account", () => {
+    const receipt = {
+      paidOn: "2026-10-01",
+      amount: 500,
+      accountId: null,
+      status: "completed" as const,
+    };
+    expect(
+      physicalAccountBalance({
+        accountId: BANK,
+        openingBalance: 20000,
+        openingBalanceDate: "2026-09-30",
+        ledger: [],
+        receipts: [receipt],
+      }),
+    ).toBe(20000);
+    expect(
+      physicalAccountBalance({
+        accountId: "mobile",
+        openingBalance: 20000,
+        openingBalanceDate: "2026-09-30",
+        ledger: [],
+        receipts: [receipt],
+      }),
+    ).toBe(20000);
+    expect(
+      physicalAccountBalance({
+        accountId: PETTY,
+        openingBalance: 500,
+        openingBalanceDate: "2026-09-30",
+        ledger: [],
+        receipts: [receipt],
+      }),
+    ).toBe(500);
+  });
+
+  it("uses the receipt date, so a 30 September receipt stays inside that day's opening balance", () => {
+    expect(
+      physicalAccountBalance({
+        accountId: BANK,
+        openingBalance: 20000,
+        openingBalanceDate: "2026-09-30",
+        ledger: [],
+        receipts: [
+          {
+            paidOn: "2026-09-30",
+            amount: 1000,
+            accountId: BANK,
+            status: "completed",
+          },
+        ],
+      }),
+    ).toBe(20000);
+  });
+
   it("drops a voided receipt", () => {
     expect(
       physicalAccountBalance({

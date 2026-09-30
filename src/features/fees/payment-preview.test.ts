@@ -13,6 +13,7 @@ import {
   recordPaymentSchema,
   voidPaymentSchema,
 } from "@/features/fees/schemas";
+import { paymentPaidOnError, schoolToday } from "@/lib/dates";
 
 const UUID_A = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 const UUID_B = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
@@ -174,6 +175,77 @@ describe("previewCreditApplication", () => {
     expect(preview.creditToApply).toBe(1000);
     expect(preview.remainingOutstanding).toBe(1000);
     expect(preview.remainingCredit).toBe(0);
+  });
+});
+
+describe("payment date authority", () => {
+  const today = "2026-09-30";
+  const base = {
+    studentId: UUID_A,
+    amount: 200,
+    method: "mobile_money" as const,
+    idempotencyKey: UUID_B,
+    financialAccountId: UUID_C,
+  };
+
+  it("accepts today and yesterday", () => {
+    expect(paymentPaidOnError(today, today)).toBeNull();
+    expect(paymentPaidOnError("2026-09-29", today)).toBeNull();
+  });
+
+  it("rejects a future date", () => {
+    expect(paymentPaidOnError("2026-10-01", today)).toBe(
+      "The payment date cannot be after today.",
+    );
+    expect(paymentPaidOnError("2026-12-09", today)).toBe(
+      "The payment date cannot be after today.",
+    );
+  });
+
+  it("rejects a malformed date and a year that is not four digits", () => {
+    expect(paymentPaidOnError("2026-02-31", today)).toBe(
+      "Enter a valid payment date.",
+    );
+    expect(paymentPaidOnError("09/30/2026", today)).toBe(
+      "Enter a valid payment date.",
+    );
+    expect(paymentPaidOnError("92026-02-08", today)).toBe(
+      "Enter a valid payment date.",
+    );
+    expect(paymentPaidOnError("20266-04-09", today)).toBe(
+      "Enter a valid payment date.",
+    );
+    expect(paymentPaidOnError("", today)).toBe("Enter a valid payment date.");
+  });
+
+  it("keeps amount and account on an accepted date", () => {
+    const parsed = recordPaymentSchema.safeParse({
+      ...base,
+      paid_on: "2026-07-15",
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.amount).toBe(200);
+      expect(parsed.data.financialAccountId).toBe(UUID_C);
+      expect(parsed.data.method).toBe("mobile_money");
+    }
+  });
+
+  it("rejects a future date in the payment schema", () => {
+    const parsed = recordPaymentSchema.safeParse({
+      ...base,
+      paid_on: "2099-01-01",
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("uses an Africa/Lusaka calendar day", () => {
+    expect(schoolToday()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(paymentPaidOnError(schoolToday(), schoolToday())).toBeNull();
+    const tomorrow = "9999-12-31";
+    expect(paymentPaidOnError(tomorrow, schoolToday())).toBe(
+      "The payment date cannot be after today.",
+    );
   });
 });
 

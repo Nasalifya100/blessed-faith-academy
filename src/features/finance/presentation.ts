@@ -23,6 +23,22 @@ export function openingBalanceConfigured(account: {
 }
 
 /**
+ * Before a cutover date exists, the account summary includes every assigned
+ * receipt and ledger movement. Any of that activity makes the database reject
+ * the first opening balance. This does not unlock or rewrite those rows.
+ */
+export function openingBalanceSetupBlocked(account: {
+  openingBalanceDate: string | null;
+  assignedReceipts: number;
+  ledgerMovement: number;
+}): boolean {
+  return (
+    !openingBalanceConfigured(account) &&
+    (account.assignedReceipts !== 0 || account.ledgerMovement !== 0)
+  );
+}
+
+/**
  * A held-money total is only meaningful once every active account has a
  * cutover date. Otherwise K0 is an unconfigured account, not an empty till.
  */

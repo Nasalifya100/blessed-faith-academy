@@ -16,8 +16,11 @@ import type { FinancialAccount } from "../types";
  */
 export function SetOpeningBalanceForm({
   account,
+  blocked = false,
 }: {
   account: FinancialAccount;
+  /** True when attributed receipts or ledger rows already prevent the first save. */
+  blocked?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +49,23 @@ export function SetOpeningBalanceForm({
     });
   }
 
+  if (blocked) {
+    return (
+      <section
+        className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/40"
+        aria-label="Opening balance blocked"
+      >
+        <p className="font-medium">Opening balance cannot be entered</p>
+        <p className="text-muted-foreground">
+          This account already has a receipt or another movement, so the
+          database will not accept an opening balance. Do not add the old
+          receipts on top of a counted balance, and do not assign a historical
+          receipt to Bank, Mobile Money, or Petty Cash from this screen.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <form
       action={onSubmit}
@@ -53,10 +73,12 @@ export function SetOpeningBalanceForm({
       aria-label="Set opening balance"
     >
       <p className="text-sm text-muted-foreground">
-        Enter the money actually in this account at the end of the cutover
-        date. Receipts and expenses on or before that date are already inside
-        this figure and are not added again. The date cannot be changed once
-        the account has a transaction.
+        Enter the actual amount held in this account at the end of the cutover
+        date. That amount should already include every transaction up to and
+        including that date. Transactions after that date are added or
+        subtracted automatically. A receipt dated on the cutover date is not
+        added again. The date cannot be changed once the account has a
+        transaction.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">

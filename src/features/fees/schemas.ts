@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { paymentPaidOnError, schoolToday } from "@/lib/dates";
 import { toNgwee } from "@/lib/money";
 
 export const FEE_CATEGORIES = [
@@ -75,10 +76,12 @@ export const recordPaymentSchema = z.object({
   method: z.enum(PAYMENT_METHODS),
   idempotencyKey: z.string().uuid("A payment request id is required"),
   reference_number: z.string().optional().or(z.literal("")),
-  paid_on: z
-    .string()
-    .min(1, "Payment date is required")
-    .refine((value) => !Number.isNaN(Date.parse(value)), "Enter a valid date"),
+  paid_on: z.string().superRefine((value, ctx) => {
+    const message = paymentPaidOnError(value, schoolToday());
+    if (message) {
+      ctx.addIssue({ code: "custom", message });
+    }
+  }),
   notes: z.string().optional().or(z.literal("")),
   /**
    * The physical account that received the money. Required once the school

@@ -406,9 +406,14 @@ export function RecordPaymentForm({
                   <Input
                     id="paid_on"
                     type="date"
+                    max={today()}
                     aria-invalid={Boolean(errors.paid_on)}
+                    aria-describedby="paid_on_hint"
                     {...register("paid_on")}
                   />
+                  <p id="paid_on_hint" className="text-xs text-muted-foreground">
+                    The date the money was received. It cannot be after today.
+                  </p>
                   {errors.paid_on ? (
                     <p className="text-sm text-destructive">
                       {errors.paid_on.message}

@@ -600,6 +600,12 @@ function runStaticChecks() {
     if (!body.includes("opening_balance_date")) {
       return "the opening-balance date is not a cutover";
     }
+    if (!body.includes("p.paid_on > v_account.opening_balance_date")) {
+      return "receipts on the opening-balance date would be counted twice";
+    }
+    if (!body.includes("e.entry_date > v_account.opening_balance_date")) {
+      return "ledger rows on the opening-balance date would be counted twice";
+    }
     return true;
   });
 
@@ -635,6 +641,75 @@ function runStaticChecks() {
     const cutover = stripComments(readMigration(FINANCE_MIGRATIONS[5]));
     const marks = cutover.match(/'self_approved'/g) ?? [];
     return marks.length >= 2 || "self-approval is not audited for expenses and salaries";
+  });
+
+  check("PAY-01", "a new receipt cannot be dated after today in Lusaka", () => {
+    const name = "20260930180000_payment_paid_on_not_future.sql";
+    const full = path.join(MIGRATIONS_DIR, name);
+    if (!fs.existsSync(full)) return "future payment-date guard migration missing";
+    const body = stripComments(fs.readFileSync(full, "utf8"));
+    if (!body.includes("p_paid_on > (now() at time zone 'Africa/Lusaka')::date")) {
+      return "database does not reject a future paid_on";
+    }
+    if (!body.includes("v_year < 1000 or v_year > 9999")) {
+      return "database does not reject a year that is not four digits";
+    }
+    if (!/before insert on public\.payments/i.test(body)) {
+      return "the date guard is not limited to insert";
+    }
+    if (/before update on public\.payments/i.test(body)) {
+      return "the date guard would block void of a historical bad date";
+    }
+    if (/update\s+public\.payments/i.test(body)) {
+      return "the date guard rewrites existing payments";
+    }
+    const schema = fs.readFileSync(
+      path.join(SRC_DIR, "features", "fees", "schemas.ts"),
+      "utf8",
+    );
+    return (
+      schema.includes("paymentPaidOnError") ||
+      "server schema does not check the payment date"
+    );
+  });
+
+  check("PAY-02", "historical paid_on correction changes only the date", () => {
+    const name = "20260930180100_payment_paid_on_correction.sql";
+    const full = path.join(MIGRATIONS_DIR, name);
+    if (!fs.existsSync(full)) return "payment date correction migration missing";
+    const body = stripComments(fs.readFileSync(full, "utf8"));
+    if (body.includes("BFA-R-2026-")) {
+      return "a production receipt correction is embedded in the migration";
+    }
+    if (!body.includes("new.paid_on = old.paid_on")) {
+      return "void no longer freezes paid_on";
+    }
+    if (!body.includes("'payment_date_corrected'")) {
+      return "date correction is not audited";
+    }
+    if (!/revoke all on function public\.correct_payment_paid_on[\s\S]*service_role/i.test(body)) {
+      return "portal or service roles can execute date correction";
+    }
+    if (!body.includes("'database_operator'")) {
+      return "a null actor is not identified as the database operator";
+    }
+    if (!body.includes("Only a completed payment can have its date corrected.")) {
+      return "a voided payment can have its date corrected";
+    }
+    if (!body.includes("The payment is already dated on that day.")) {
+      return "a same-date correction writes an audit";
+    }
+    if (!body.includes("opening-balance date")) {
+      return "a correction can cross an opening-balance date";
+    }
+    if (!/for update/i.test(body)) {
+      return "the payment row is not locked";
+    }
+    const update = body.match(/update public\.payments[\s\S]*?returning id into v_id;/);
+    if (!update || !/set paid_on = p_corrected_paid_on/.test(update[0])) {
+      return "correction does not update only paid_on";
+    }
+    return true;
   });
 
   check("MONEY-01", "money math never uses floating point directly", () => {

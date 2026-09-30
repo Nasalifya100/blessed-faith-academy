@@ -16,6 +16,7 @@ import {
 import {
   moneyHeldReady,
   openingBalanceConfigured,
+  openingBalanceSetupBlocked,
   primaryPettyCashAccount,
 } from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
@@ -122,9 +123,11 @@ export default async function PettyCashPage() {
             balanceReady ? formatKwacha(totalFloat) : "Opening balance required"
           }
           hint={
-            openingBalanceConfigured(primary)
-              ? primary.name
-              : "Set the opening balance before treating this as cash on hand"
+            openingBalanceSetupBlocked(primary)
+              ? "Opening balance is blocked because this cash already has movements"
+              : openingBalanceConfigured(primary)
+                ? primary.name
+                : "Set the opening balance before treating this as cash on hand"
           }
           icon={Coins}
           tone={balanceReady && totalFloat < 0 ? "danger" : "default"}

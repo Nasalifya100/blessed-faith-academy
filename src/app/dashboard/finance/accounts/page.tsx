@@ -10,6 +10,7 @@ import { FINANCIAL_ACCOUNT_TYPE_LABELS } from "@/features/finance/schemas";
 import {
   moneyHeldReady,
   openingBalanceConfigured,
+  openingBalanceSetupBlocked,
 } from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { BackLink, PageHeader, PageShell } from "@/components/layout/page-shell";
@@ -54,11 +55,19 @@ export default async function FinanceAccountsPage() {
 
       <FinanceNav role={role} current="/dashboard/finance/accounts" />
 
-      {accounts.some((account) => !account.openingBalanceDate) ? (
+      {accounts.some((account) => openingBalanceSetupBlocked(account)) ? (
         <p className="text-sm text-muted-foreground">
-          An account without an opening-balance date is not cut over. Set that
-          date and the real balance before recording new money, or historical
-          cash and later receipts will not meet.
+          An account that already has an assigned receipt or another movement
+          cannot receive an opening balance. The cash total stays hidden until
+          that is resolved. Do not treat the portal receipt history as the
+          amount still held.
+        </p>
+      ) : accounts.some((account) => !account.openingBalanceDate) ? (
+        <p className="text-sm text-muted-foreground">
+          An account without an opening-balance date is not cut over. Enter the
+          actual amount held at the end of one agreed date. Transactions on
+          that date are already inside the figure. Transactions after it are
+          added or subtracted automatically.
         </p>
       ) : null}
       {unassignedReceipts.count > 0 ? (
@@ -66,10 +75,10 @@ export default async function FinanceAccountsPage() {
           {unassignedReceipts.count} completed{" "}
           {unassignedReceipts.count === 1 ? "receipt is" : "receipts are"} not
           assigned to an account (
-          {formatKwacha(unassignedReceipts.amount)}). They are excluded from
-          every balance. If they were received on or before an opening-balance
-          date, they are already inside that opening balance — do not add them
-          again.
+          {formatKwacha(unassignedReceipts.amount)}). They remain valid student
+          receipts and stay out of Bank, Mobile Money, and Petty Cash. Do not
+          assign them from here. If that cash is physically in an account,
+          include it once in that account&apos;s end-of-day opening balance.
         </p>
       ) : null}
 

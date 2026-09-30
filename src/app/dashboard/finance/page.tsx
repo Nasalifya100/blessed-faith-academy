@@ -19,7 +19,7 @@ import {
   getFinanceOverview,
   getLedgerEntries,
 } from "@/features/finance/queries";
-import { activityHref, moneyHeldReady, openingBalanceConfigured } from "@/features/finance/presentation";
+import { activityHref, moneyHeldReady, openingBalanceConfigured, openingBalanceSetupBlocked } from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { PageHeader, PageShell, SectionHeading } from "@/components/layout/page-shell";
 import {
@@ -141,7 +141,11 @@ export default async function FinanceOverviewPage({
             hint={
               moneyHeldReady(overview.accounts)
                 ? "Across bank, mobile money, and petty cash"
-                : "Set each account's opening balance before trusting a total"
+                : overview.accounts.some((account) =>
+                      openingBalanceSetupBlocked(account),
+                    )
+                  ? "Opening balance is blocked where receipts are already assigned"
+                  : "Set each account's opening balance before trusting a total"
             }
             icon={Landmark}
             href="/dashboard/finance/accounts"

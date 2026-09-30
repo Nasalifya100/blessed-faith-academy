@@ -11,6 +11,7 @@ import {
   moneyHeldReady,
   monthStart,
   openingBalanceConfigured,
+  openingBalanceSetupBlocked,
   OPERATIONAL_ACTIVITIES,
   primaryPettyCashAccount,
   suggestedCategoryId,
@@ -91,6 +92,30 @@ describe("money held presentation", () => {
       ]),
     ).toBe(true);
     expect(openingBalanceConfigured({ openingBalanceDate: null })).toBe(false);
+  });
+
+  it("blocks the first opening balance once attributed activity exists", () => {
+    expect(
+      openingBalanceSetupBlocked({
+        openingBalanceDate: null,
+        assignedReceipts: 31000,
+        ledgerMovement: 0,
+      }),
+    ).toBe(true);
+    expect(
+      openingBalanceSetupBlocked({
+        openingBalanceDate: null,
+        assignedReceipts: 0,
+        ledgerMovement: 0,
+      }),
+    ).toBe(false);
+    expect(
+      openingBalanceSetupBlocked({
+        openingBalanceDate: "2026-09-30",
+        assignedReceipts: 1000,
+        ledgerMovement: 0,
+      }),
+    ).toBe(false);
   });
 });
 

@@ -11,6 +11,10 @@ import {
   getLedgerEntries,
 } from "@/features/finance/queries";
 import { FINANCIAL_ACCOUNT_TYPE_LABELS } from "@/features/finance/schemas";
+import {
+  openingBalanceConfigured,
+  openingBalanceSetupBlocked,
+} from "@/features/finance/presentation";
 import { formatKwacha } from "@/lib/money";
 import { BackLink, PageHeader, PageShell } from "@/components/layout/page-shell";
 import {
@@ -39,6 +43,8 @@ export default async function AccountDetailPage({
   if (!account) notFound();
 
   const canSetOpening = hasFinanceCapability(role, "FINANCE_SETUP_MANAGE");
+  const cutoverReady = openingBalanceConfigured(account);
+  const setupBlocked = openingBalanceSetupBlocked(account);
   const entries = await getLedgerEntries({ accountId: account.id, limit: 200 });
 
   const movedIn = entries
@@ -69,8 +75,16 @@ export default async function AccountDetailPage({
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Opening balance"
-          value={formatKwacha(account.openingBalance)}
-          hint={account.openingBalanceDate ?? "No start date recorded"}
+          value={
+            cutoverReady
+              ? formatKwacha(account.openingBalance)
+              : "Opening balance required"
+          }
+          hint={
+            cutoverReady
+              ? `Actual balance at the end of ${account.openingBalanceDate}`
+              : "No cutover date recorded"
+          }
         />
         <StatCard
           title="Money in"
@@ -86,28 +100,51 @@ export default async function AccountDetailPage({
         />
         <StatCard
           title="Current balance"
-          value={formatKwacha(account.currentBalance)}
-          hint="Opening balance, plus later movements, plus receipts that name this account"
+          value={
+            cutoverReady
+              ? formatKwacha(account.currentBalance)
+              : "Opening balance required"
+          }
+          hint={
+            cutoverReady
+              ? "Opening balance, plus receipts and movements after that date"
+              : "Withheld until the end-of-day cutover balance is entered"
+          }
           icon={Landmark}
-          tone={account.currentBalance >= 0 ? "default" : "danger"}
+          tone={
+            cutoverReady && account.currentBalance < 0 ? "danger" : "default"
+          }
         />
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        Opening {formatKwacha(account.openingBalance)}
-        {account.openingBalanceDate
-          ? ` at the end of ${account.openingBalanceDate}`
-          : " (no cutover date yet)"}
-        {" + "}
-        receipts assigned to this account{" "}
-        {formatKwacha(account.assignedReceipts)}
-        {" + "}
-        other movements {formatKwacha(account.ledgerMovement)}
-        {" = "}
-        {formatKwacha(account.currentBalance)}.
-      </p>
+      {cutoverReady ? (
+        <p className="text-sm text-muted-foreground">
+          Opening {formatKwacha(account.openingBalance)} at the end of{" "}
+          {account.openingBalanceDate}
+          {" + "}
+          receipts after that date {formatKwacha(account.assignedReceipts)}
+          {" + "}
+          transfers and other movements after that date{" "}
+          {formatKwacha(account.ledgerMovement)}
+          {" = "}
+          {formatKwacha(account.currentBalance)}.
+          {account.currentBalance < 0
+            ? " This balance is below zero. It is shown as recorded and is not corrected automatically."
+            : ""}
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Current balance is withheld. Enter the actual amount held at the end
+          of the cutover date before this account is treated as money on hand.
+          {setupBlocked
+            ? " Assigned receipts or movements already exist, so that entry is blocked."
+            : ""}
+        </p>
+      )}
 
-      {canSetOpening ? <SetOpeningBalanceForm account={account} /> : null}
+      {canSetOpening ? (
+        <SetOpeningBalanceForm account={account} blocked={setupBlocked} />
+      ) : null}
 
       <Card className="shadow-sm">
         <CardHeader>
