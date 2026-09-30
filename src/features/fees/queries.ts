@@ -188,8 +188,12 @@ export interface StatementCharge {
   /** Derived from allocations when possible; status column retained for cancelled/waived. */
   status: string;
   termName: string | null;
+  termStart: string | null;
+  termNumber: number | null;
   academicYearName: string | null;
   academicYearId: string;
+  yearStart: string | null;
+  yearCreatedAt: string | null;
   isBroughtForward: boolean;
   createdAt: string;
   chargeSource: "NORMAL" | "LEGACY_OPENING_BALANCE";
@@ -250,7 +254,9 @@ export interface FinanceAuditEvent {
 }
 
 export interface StudentFeeStatement {
+  academicYearId: string | null;
   academicYearName: string | null;
+  academicYearStart: string | null;
   currentTermName: string | null;
   currentTermId: string | null;
   /** All active (non-cancelled) charges across years — statement listing. */
@@ -286,7 +292,7 @@ export async function getStudentFeeStatement(
 
   const { data: year } = await supabase
     .from("academic_years")
-    .select("id, name")
+    .select("id, name, start_date")
     .eq("is_current", true)
     .maybeSingle();
 
@@ -312,7 +318,7 @@ export async function getStudentFeeStatement(
   const { data: chargeRows } = await supabase
     .from("charges")
     .select(
-      "id, description, amount, status, created_at, academic_year_id, charge_source, legacy_original_amount, legacy_previously_paid_amount, legacy_notes, migrated_at, fee_item:fee_items(name, category, is_optional), term:terms(name), academic_year:academic_years(name)",
+      "id, description, amount, status, created_at, academic_year_id, charge_source, legacy_original_amount, legacy_previously_paid_amount, legacy_notes, migrated_at, fee_item:fee_items(name, category, is_optional), term:terms(name, start_date, term_number), academic_year:academic_years(name, start_date, created_at)",
     )
     .eq("student_id", studentId)
     .neq("status", "cancelled")
@@ -360,8 +366,8 @@ export async function getStudentFeeStatement(
         category: string;
         is_optional: boolean;
       } | null;
-      term: { name: string } | null;
-      academic_year: { name: string } | null;
+      term: { name: string; start_date: string | null; term_number: number | null } | null;
+      academic_year: { name: string; start_date: string | null; created_at: string } | null;
     }[] | null) ?? []
   ).map((row) => {
     const isLegacy = row.charge_source === "LEGACY_OPENING_BALANCE";
@@ -394,8 +400,12 @@ export async function getStudentFeeStatement(
       remainingAmount,
       status: derivedStatus,
       termName: row.term?.name ?? null,
+      termStart: row.term?.start_date ?? null,
+      termNumber: row.term?.term_number ?? null,
       academicYearName: row.academic_year?.name ?? null,
       academicYearId: row.academic_year_id,
+      yearStart: row.academic_year?.start_date ?? null,
+      yearCreatedAt: row.academic_year?.created_at ?? null,
       isBroughtForward: Boolean(year?.id && row.academic_year_id !== year.id),
       createdAt: row.created_at,
       chargeSource: isLegacy ? "LEGACY_OPENING_BALANCE" : "NORMAL",
@@ -635,7 +645,9 @@ export async function getStudentFeeStatement(
   );
 
   return {
+    academicYearId: year?.id ?? null,
     academicYearName: year?.name ?? null,
+    academicYearStart: year?.start_date ?? null,
     currentTermName,
     currentTermId,
     charges,

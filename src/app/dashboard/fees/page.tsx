@@ -16,6 +16,7 @@ import {
 } from "@/features/fees/schemas";
 import { ScheduleAmountEditor } from "@/features/fees/components/schedule-amount-editor";
 import { GenerateClassChargesPanel } from "@/features/fees/components/generate-class-charges-panel";
+import { mandatoryChargeConfirmationLines } from "@/features/fees/billing-balances";
 import { FinanceDashboardSummary } from "@/features/fees/components/finance-dashboard-summary";
 import { SetCurrentPeriodPanel } from "@/features/config/components/set-current-period-panel";
 import { listAcademicYearsAndTerms } from "@/features/config/queries";
@@ -125,16 +126,21 @@ async function FeesDashboardBody({
           <CardHeader>
             <CardTitle>Generate class charges</CardTitle>
             <CardDescription>
-              Apply mandatory fees for every enrolled pupil in a class for the
-              current term
-              {currentTermName ? ` (${currentTermName})` : ""}.
+              Apply mandatory fees for every enrolled pupil in a class. This uses
+            the current academic year
+            {academicYearName ? ` (${academicYearName})` : ""} and the current
+            term
+            {currentTermName ? ` (${currentTermName})` : ""}. Other years are
+            not billed from this screen.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <GenerateClassChargesPanel
               classes={yearClasses.classes}
+              academicYearName={academicYearName}
               termId={currentTermId}
               termName={currentTermName}
+              mandatoryFeeNames={mandatoryChargeConfirmationLines(items)}
             />
           </CardContent>
         </Card>

@@ -217,9 +217,8 @@ export function StudentFinancialOverview({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               School fees plus additional charges such as uniforms and meals.
-              This is not the mandatory school-fee balance. BF{" "}
-              {formatKwacha(statement.broughtForwardOutstanding)} · Current year{" "}
-              {formatKwacha(statement.currentYearOutstanding)}
+              This is not the mandatory school-fee balance. Current, previous,
+              and later years are shown in Student finance above.
             </p>
           </CardContent>
         </Card>

@@ -6,25 +6,32 @@ import { useRouter } from "next/navigation";
 import { generateClassChargesAction } from "@/features/fees/actions";
 import type { ClassOption } from "@/features/students/queries";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import { SelectNative } from "@/components/ui/select-native";
 
 interface GenerateClassChargesPanelProps {
   classes: ClassOption[];
+  academicYearName: string | null;
   termId: string | null;
   termName: string | null;
+  mandatoryFeeNames: string[];
 }
 
 export function GenerateClassChargesPanel({
   classes,
+  academicYearName,
   termId,
   termName,
+  mandatoryFeeNames,
 }: GenerateClassChargesPanelProps) {
   const router = useRouter();
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
   const [isPending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const selected = classes.find((option) => option.id === classId) ?? null;
 
   if (classes.length === 0) {
     return (
@@ -42,6 +49,7 @@ export function GenerateClassChargesPanel({
         classId,
         termId: termId ?? undefined,
       });
+      setConfirmOpen(false);
       if (result.error) {
         setError(result.error);
         return;
@@ -76,13 +84,36 @@ export function GenerateClassChargesPanel({
         <Button
           type="button"
           disabled={isPending || !classId}
-          onClick={handleGenerate}
+          onClick={() => {
+            setMessage(null);
+            setError(null);
+            setConfirmOpen(true);
+          }}
         >
           {isPending
             ? "Generating…"
             : `Generate class charges${termName ? ` (${termName})` : ""}`}
         </Button>
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Generate charges"
+        description={[
+          `Academic year: ${academicYearName ?? "current academic year"}.`,
+          `Term: ${termName ?? "current term"}.`,
+          `Class: ${selected?.gradeName ?? "selected class"}.`,
+          mandatoryFeeNames.length > 0
+            ? `Mandatory charges: ${mandatoryFeeNames.join(", ")}.`
+            : "Mandatory charges come from the fee schedule for each pupil's grade.",
+          "Amounts follow each pupil's grade on the fee schedule.",
+          "Meals, uniforms, and tuck shop are not included.",
+          "Pupils who already have these charges for this period are skipped.",
+        ].join(" ")}
+        confirmLabel="Generate charges"
+        pending={isPending}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleGenerate}
+      />
       {message ? (
         <p className="text-sm text-emerald-600" role="status">
           {message}

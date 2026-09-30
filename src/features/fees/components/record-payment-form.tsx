@@ -14,6 +14,12 @@ import {
 } from "@/features/fees/schemas";
 import { recordPaymentAction } from "@/features/fees/actions";
 import { previewPaymentApplication } from "@/features/fees/payment-preview";
+import {
+  previewNextPaymentAllocation,
+  summarizeProposedAllocation,
+  type SettlementBasis,
+  type SettlementCharge,
+} from "@/features/fees/billing-balances";
 import { formatKwacha } from "@/lib/money";
 import { schoolToday } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
@@ -47,6 +53,9 @@ interface RecordPaymentFormProps {
   currentYearOutstanding?: number;
   availableCredit?: number;
   studentName?: string;
+  paymentsAlreadyReceived?: number;
+  allocationBasis?: SettlementBasis;
+  allocationCharges?: SettlementCharge[];
 }
 
 const today = () => schoolToday();
@@ -67,6 +76,9 @@ export function RecordPaymentForm({
   currentYearOutstanding = 0,
   availableCredit = 0,
   studentName,
+  paymentsAlreadyReceived = 0,
+  allocationBasis,
+  allocationCharges = [],
 }: RecordPaymentFormProps) {
   const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
@@ -122,6 +134,30 @@ export function RecordPaymentForm({
     amountReceived: previewAmount,
     outstandingBalance,
   });
+  const allocationPreview = useMemo(() => {
+    if (!allocationBasis || allocationCharges.length === 0 || previewAmount <= 0) {
+      return null;
+    }
+    return previewNextPaymentAllocation({
+      basis: allocationBasis,
+      paymentsAlreadyReceived,
+      nextPayment: previewAmount,
+      currentYearId: null,
+      charges: allocationCharges,
+    });
+  }, [
+    allocationBasis,
+    allocationCharges,
+    paymentsAlreadyReceived,
+    previewAmount,
+  ]);
+  const allocationSummary = useMemo(
+    () =>
+      allocationPreview
+        ? summarizeProposedAllocation(allocationPreview.lines)
+        : [],
+    [allocationPreview],
+  );
 
   function openForm() {
     const key = crypto.randomUUID();
@@ -461,6 +497,39 @@ export function RecordPaymentForm({
                   The unapplied amount will remain on the pupil’s account as
                   available credit.
                 </p>
+              ) : null}
+              {allocationSummary.length > 0 ? (
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-xs font-medium">
+                    {allocationBasis === "fifo_estimate"
+                      ? "Estimated allocation"
+                      : "Expected application"}
+                  </p>
+                  <p className="text-sm">
+                    Amount being paid{" "}
+                    <span className="font-semibold tabular-nums">
+                      {formatKwacha(previewAmount)}
+                    </span>
+                  </p>
+                  <ul className="space-y-1 text-sm">
+                    {allocationSummary.map((line) => (
+                      <li
+                        key={line.activity}
+                        className="flex justify-between gap-3"
+                      >
+                        <span>{line.label}</span>
+                        <span className="tabular-nums">
+                          {formatKwacha(line.amount)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-muted-foreground">
+                    {allocationBasis === "fifo_estimate"
+                      ? "This is how the payment would be matched to the oldest outstanding charges. The breakdown is an estimate while payment allocation is not yet active."
+                      : "Oldest outstanding charges are paid first. This application is stored with the one receipt."}
+                  </p>
+                </div>
               ) : null}
             </section>
 

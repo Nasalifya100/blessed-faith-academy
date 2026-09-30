@@ -47,31 +47,56 @@ export function previewCreditApplication(input: {
   };
 }
 
-/** Deterministic oldest-first sort for charge allocation previews/tests. */
+/**
+ * Term ordering used by allocate_payment_to_charges:
+ * start_date, otherwise 2000-01-01 plus (term_number - 1) * 90 days.
+ * A charge with no term uses term_number 1, so it sorts before later terms.
+ */
+export function sqlTermSortKey(
+  termStart: string | null,
+  termNumber: number | null,
+): string {
+  if (termStart) return termStart;
+  const term = termNumber ?? 1;
+  const cursor = new Date(Date.UTC(2000, 0, 1));
+  cursor.setUTCDate(cursor.getUTCDate() + (term - 1) * 90);
+  return cursor.toISOString().slice(0, 10);
+}
+
+/**
+ * Year ordering used by allocate_payment_to_charges:
+ * academic year start_date, otherwise the year row's created date.
+ * A missing date sorts last, matching nulls last.
+ */
+export function sqlYearSortKey(
+  yearStart: string | null,
+  yearCreatedAt?: string | null,
+): string {
+  if (yearStart) return yearStart;
+  if (yearCreatedAt && yearCreatedAt.length >= 10) {
+    return yearCreatedAt.slice(0, 10);
+  }
+  return "9999-12-31";
+}
+
+/** Deterministic oldest-first sort matching allocate_payment_to_charges. */
 export function sortChargesOldestFirst<
   T extends {
     id: string;
     yearStart: string | null;
+    yearCreatedAt?: string | null;
     termStart: string | null;
     termNumber: number | null;
     createdAt: string;
   },
 >(charges: T[]): T[] {
   return [...charges].sort((a, b) => {
-    const yearA = a.yearStart ?? "9999-12-31";
-    const yearB = b.yearStart ?? "9999-12-31";
+    const yearA = sqlYearSortKey(a.yearStart, a.yearCreatedAt);
+    const yearB = sqlYearSortKey(b.yearStart, b.yearCreatedAt);
     if (yearA !== yearB) return yearA.localeCompare(yearB);
 
-    const termA =
-      a.termStart ??
-      (a.termNumber != null
-        ? `2000-${String(((a.termNumber - 1) % 12) + 1).padStart(2, "0")}-01`
-        : "9999-12-31");
-    const termB =
-      b.termStart ??
-      (b.termNumber != null
-        ? `2000-${String(((b.termNumber - 1) % 12) + 1).padStart(2, "0")}-01`
-        : "9999-12-31");
+    const termA = sqlTermSortKey(a.termStart, a.termNumber);
+    const termB = sqlTermSortKey(b.termStart, b.termNumber);
     if (termA !== termB) return termA.localeCompare(termB);
 
     if (a.createdAt !== b.createdAt) {

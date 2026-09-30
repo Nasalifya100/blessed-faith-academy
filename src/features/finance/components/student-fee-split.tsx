@@ -1,4 +1,4 @@
-import { formatKwacha } from "@/lib/money";
+import { addKwacha, formatKwacha, sumKwacha } from "@/lib/money";
 import {
   Card,
   CardContent,
@@ -27,23 +27,143 @@ import type { StudentFinanceBreakdown } from "../types";
  */
 export function StudentFeeSplit({
   breakdown,
+  academicYearName = null,
+  currentYearOutstanding = null,
+  previousOutstanding = 0,
+  laterOutstanding = 0,
+  undatedOutstanding = 0,
 }: {
   breakdown: StudentFinanceBreakdown;
+  academicYearName?: string | null;
+  currentYearOutstanding?: number | null;
+  previousOutstanding?: number;
+  laterOutstanding?: number;
+  undatedOutstanding?: number;
 }) {
   const { schoolFees, additional, additionalTotals, basis } = breakdown;
   const hasAdditional = additional.length > 0;
+  const combinedOutstanding = addKwacha(
+    schoolFees.outstanding,
+    additionalTotals.outstanding,
+  );
+  const uniformsOutstanding =
+    additional.find((row) => row.code === "UNIFORMS")?.outstanding ?? 0;
+  const mealsOutstanding =
+    additional.find((row) => row.code === "MEALS")?.outstanding ?? 0;
+  const otherOutstanding = sumKwacha(
+    additional
+      .filter((row) => row.code !== "UNIFORMS" && row.code !== "MEALS")
+      .map((row) => row.outstanding),
+  );
+  const breakdownRows = [
+    { label: "School Fees", amount: schoolFees.outstanding, hint: "Mandatory" },
+    { label: "Uniforms", amount: uniformsOutstanding, hint: "Only if charged" },
+    { label: "Meals", amount: mealsOutstanding, hint: "Only if charged" },
+    { label: "Other", amount: otherOutstanding, hint: "" },
+  ];
+  const showPrevious = previousOutstanding > 0;
+  const showLater = laterOutstanding > 0;
+  const showUndated = undatedOutstanding > 0;
 
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle>School fees and additional purchases</CardTitle>
+        <CardTitle>Student finance</CardTitle>
         <CardDescription>
           {basis === "allocations"
-            ? "Mandatory school fees are based on how each payment has been applied to each charge. The combined student account outstanding, shown separately, also includes additional purchases."
-            : "Mandatory school fees are estimated by applying payments to the oldest charges first. This is an estimate until allocations are switched on. The combined student account outstanding, shown separately, also includes additional purchases."}
+            ? "Oldest outstanding charges are paid first. These figures follow the stored payment allocations."
+            : "Oldest outstanding charges are paid first. This breakdown is an estimate and is not stored as fund income."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        <section className="space-y-2" aria-label="Combined student account">
+          <h3 className="text-sm font-semibold">Combined outstanding</h3>
+          <p
+            className={
+              combinedOutstanding > 0
+                ? "text-2xl font-semibold tabular-nums text-red-700 dark:text-red-300"
+                : "text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300"
+            }
+          >
+            {formatKwacha(combinedOutstanding)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Mandatory school fees plus uniforms, meals, and other pupil charges.
+            School Fees below are not the whole account.
+          </p>
+        </section>
+
+        <section className="space-y-2" aria-label="Activity breakdown">
+          <h3 className="text-sm font-semibold">Breakdown</h3>
+          <ul className="divide-y rounded-xl border">
+            {breakdownRows.map((row) => (
+              <li
+                key={row.label}
+                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <span>
+                  {row.label}
+                  {row.hint ? (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {row.hint}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="tabular-nums font-medium">
+                  {formatKwacha(row.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {currentYearOutstanding != null ? (
+          <section className="space-y-2" aria-label="Academic year outstanding">
+            <h3 className="text-sm font-semibold">
+              Current academic year
+              {academicYearName ? ` — ${academicYearName}` : ""}
+            </h3>
+            <p className="text-lg font-semibold tabular-nums">
+              {formatKwacha(currentYearOutstanding)}
+            </p>
+            {showPrevious ? (
+              <div className="space-y-1 text-sm">
+                <p className="flex justify-between gap-3">
+                  <span>Previous outstanding</span>
+                  <span className="tabular-nums font-medium">
+                    {formatKwacha(previousOutstanding)}
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Previous debt stays on its original academic year.
+                </p>
+              </div>
+            ) : null}
+            {showUndated ? (
+              <p className="flex justify-between gap-3 text-sm">
+                <span>Other academic year</span>
+                <span className="tabular-nums font-medium">
+                  {formatKwacha(undatedOutstanding)}
+                </span>
+              </p>
+            ) : null}
+            {showLater ? (
+              <div className="space-y-1 text-sm">
+                <p className="flex justify-between gap-3">
+                  <span>Later academic year</span>
+                  <span className="tabular-nums font-medium">
+                    {formatKwacha(laterOutstanding)}
+                  </span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  This is not previous debt. It belongs to a year that starts
+                  after the current year.
+                </p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <section className="space-y-2" aria-label="Mandatory school fees">
           <h3 className="text-sm font-semibold">Mandatory school fees</h3>
           <dl className="grid gap-3 sm:grid-cols-3">

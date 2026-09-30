@@ -18,6 +18,7 @@ import {
 
 interface OptionalFeesOptInFormProps {
   studentId: string;
+  academicYearName: string | null;
   termId: string | null;
   termName: string | null;
   meals: OptionalFeeOption[];
@@ -27,6 +28,7 @@ interface OptionalFeesOptInFormProps {
 
 export function OptionalFeesOptInForm({
   studentId,
+  academicYearName,
   termId,
   termName,
   meals,
@@ -153,9 +155,12 @@ export function OptionalFeesOptInForm({
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Optional charges</CardTitle>
           <CardDescription>
-            Meals are charged per term
-            {termName ? ` (${termName})` : ""}; uniforms once per year.
-          </CardDescription>
+          Meals are a student charge for{" "}
+          {termName ?? "the current term"}
+          {academicYearName ? ` in ${academicYearName}` : ""}. Uniforms are a
+          student charge for the academic year, not a term. Tuck shop sales are
+          not added here.
+        </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {statusLines.map((line) => (
@@ -190,7 +195,8 @@ export function OptionalFeesOptInForm({
           <div className="space-y-1">
             <CardTitle className="text-base">{addLabel}</CardTitle>
             <CardDescription>
-              Select optional items to add to this student&apos;s statement.
+              This creates a student charge. It is not general income and it is
+              not a tuck shop sale.
             </CardDescription>
           </div>
           <Button
@@ -217,7 +223,9 @@ export function OptionalFeesOptInForm({
                 Meal plan (pick one)
               </legend>
               <p className="text-xs text-muted-foreground">
-                Charged for {termName ?? "the current term"}.
+                Activity: Meals. Academic year:{" "}
+                {academicYearName ?? "current year"}. Term:{" "}
+                {termName ?? "current term"}.
               </p>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -257,7 +265,9 @@ export function OptionalFeesOptInForm({
             <fieldset className="space-y-2 rounded-xl border p-3">
               <legend className="px-1 text-sm font-medium">Uniforms</legend>
               <p className="text-xs text-muted-foreground">
-                Select any items not yet charged this year.
+                Activity: Uniforms. Academic year:{" "}
+                {academicYearName ?? "current year"}. Charged for the year, not
+                for one term.
               </p>
               {availableUniforms.map((item) => (
                 <label
@@ -282,6 +292,32 @@ export function OptionalFeesOptInForm({
             <p className="text-sm text-muted-foreground">
               All listed uniforms are already on this statement.
             </p>
+          ) : null}
+
+          {mealId || uniformIds.length > 0 ? (
+            <div className="space-y-1 rounded-xl border bg-muted/20 px-3 py-2 text-sm">
+              <p className="font-medium">Student charges to add</p>
+              {mealId ? (
+                <p>
+                  Meals · {meals.find((meal) => meal.id === mealId)?.name} ·{" "}
+                  {formatKwacha(
+                    meals.find((meal) => meal.id === mealId)?.amount ?? 0,
+                  )}{" "}
+                  · {academicYearName ?? "current year"} ·{" "}
+                  {termName ?? "current term"}
+                </p>
+              ) : null}
+              {uniformIds.map((id) => {
+                const item = availableUniforms.find((uniform) => uniform.id === id);
+                if (!item) return null;
+                return (
+                  <p key={id}>
+                    Uniforms · {item.name} · {formatKwacha(item.amount)} ·{" "}
+                    {academicYearName ?? "current year"} · year charge
+                  </p>
+                );
+              })}
+            </div>
           ) : null}
 
           {serverError ? (

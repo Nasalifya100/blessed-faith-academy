@@ -20,6 +20,7 @@ import {
 import { ProfileChangeHistoryPanel } from "@/features/students/components/profile-change-history-panel";
 import {
   getOptionalFeeOptions,
+  getFeesSetupData,
   getStudentFeeStatement,
   getStudentRequirementsChecklist,
 } from "@/features/fees/queries";
@@ -42,8 +43,15 @@ import {
   getStudentFinanceBreakdown,
 } from "@/features/finance/queries";
 import { StudentFeeSplit } from "@/features/finance/components/student-fee-split";
+import {
+  mandatoryChargeConfirmationLines,
+  settleStudentCharges,
+  studentActivityForFeeItem,
+  type SettlementCharge,
+} from "@/features/fees/billing-balances";
 import { FeeStatement } from "@/features/fees/components/fee-statement";
 import { GenerateStudentChargesButton } from "@/features/fees/components/generate-student-charges-button";
+import { StudentBillingPeriods } from "@/features/fees/components/student-billing-periods";
 import { OptionalFeesOptInForm } from "@/features/fees/components/optional-fees-opt-in-form";
 import { RecordPaymentForm } from "@/features/fees/components/record-payment-form";
 import { ApplyCreditButton } from "@/features/fees/components/apply-credit-button";
@@ -166,6 +174,7 @@ export default async function StudentProfilePage({
     yearClasses,
     financeBreakdown,
     paymentAccounts,
+    feesSetup,
   ] = await Promise.all([
     getStudentProfile(id),
     getCurrentUser(),
@@ -178,6 +187,7 @@ export default async function StudentProfilePage({
     getCurrentYearClasses(),
     getStudentFinanceBreakdown(id),
     getFinancialAccounts(),
+    getFeesSetupData(),
   ]);
 
   if (!student) {
@@ -189,6 +199,36 @@ export default async function StudentProfilePage({
     redirect("/dashboard");
   }
   const canManageFees = Boolean(role && FEE_MANAGER_ROLES.includes(role));
+  const allocationCharges: SettlementCharge[] = statement.charges.map(
+    (charge) => ({
+      id: charge.id,
+      label: charge.feeItemName,
+      activity: studentActivityForFeeItem({
+        category: charge.category,
+        isOptional: charge.isOptional,
+      }),
+      amount: charge.amount,
+      storedAllocated: charge.allocatedAmount,
+      yearId: charge.academicYearId,
+      yearName: charge.academicYearName,
+      yearStart: charge.yearStart,
+      yearCreatedAt: charge.yearCreatedAt,
+      termName: charge.termName,
+      termStart: charge.termStart,
+      termNumber: charge.termNumber,
+      createdAt: charge.createdAt,
+      waived: charge.status === "waived",
+    }),
+  );
+  const billingSettlement = financeBreakdown
+    ? settleStudentCharges({
+        basis: financeBreakdown.basis,
+        paymentsTotal: statement.totalPaid,
+        currentYearId: statement.academicYearId,
+        currentYearStart: statement.academicYearStart,
+        charges: allocationCharges,
+      })
+    : null;
   const canTrackRequirements = Boolean(
     current?.profile?.is_active &&
       role &&
@@ -518,8 +558,10 @@ export default async function StudentProfilePage({
             >
               <GenerateStudentChargesButton
                 studentId={student.id}
+                academicYearName={statement.academicYearName}
                 termId={statement.currentTermId}
                 termName={statement.currentTermName}
+                mandatoryFeeNames={mandatoryChargeConfirmationLines(feesSetup.items)}
               />
               <RecordPaymentForm
                 studentId={student.id}
@@ -531,9 +573,18 @@ export default async function StudentProfilePage({
                     defaultForMethod: account.defaultForMethod,
                   }))}
                 outstandingBalance={statement.balance}
-                broughtForwardOutstanding={statement.broughtForwardOutstanding}
-                currentYearOutstanding={statement.currentYearOutstanding}
+                broughtForwardOutstanding={
+                  billingSettlement?.previousOutstanding ??
+                  statement.broughtForwardOutstanding
+                }
+                currentYearOutstanding={
+                  billingSettlement?.currentYearOutstanding ??
+                  statement.currentYearOutstanding
+                }
                 availableCredit={statement.availableCredit}
+                paymentsAlreadyReceived={statement.totalPaid}
+                allocationBasis={financeBreakdown?.basis}
+                allocationCharges={allocationCharges}
                 studentName={student.fullName}
               />
               <ApplyCreditButton
@@ -544,6 +595,7 @@ export default async function StudentProfilePage({
               <div className="lg:col-span-2">
                 <OptionalFeesOptInForm
                   studentId={student.id}
+                  academicYearName={optionalFees.academicYearName}
                   termId={optionalFees.currentTermId}
                   termName={optionalFees.currentTermName}
                   meals={optionalFees.meals}
@@ -554,7 +606,31 @@ export default async function StudentProfilePage({
             </section>
           ) : null}
           {financeBreakdown ? (
-            <StudentFeeSplit breakdown={financeBreakdown} />
+            <StudentFeeSplit
+              breakdown={financeBreakdown}
+              academicYearName={statement.academicYearName}
+              currentYearOutstanding={
+                billingSettlement?.currentYearOutstanding ??
+                statement.currentYearOutstanding
+              }
+              previousOutstanding={
+                billingSettlement?.previousOutstanding ??
+                statement.broughtForwardOutstanding
+              }
+              laterOutstanding={billingSettlement?.laterOutstanding ?? 0}
+              undatedOutstanding={billingSettlement?.undatedOutstanding ?? 0}
+            />
+          ) : null}
+          {billingSettlement ? (
+            <StudentBillingPeriods
+              basis={billingSettlement.basis}
+              academicYearName={statement.academicYearName}
+              currentYearOutstanding={billingSettlement.currentYearOutstanding}
+              previousOutstanding={billingSettlement.previousOutstanding}
+              laterOutstanding={billingSettlement.laterOutstanding}
+              undatedOutstanding={billingSettlement.undatedOutstanding}
+              periods={billingSettlement.periods}
+            />
           ) : null}
           <FeeStatement
             statement={statement}
