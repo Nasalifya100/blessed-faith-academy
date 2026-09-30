@@ -124,7 +124,7 @@ export default async function PettyCashPage() {
           }
           hint={
             openingBalanceSetupBlocked(primary)
-              ? "Opening balance is blocked because this cash already has movements"
+              ? "Count the cash in the box. Finance setup records that count with the other accounts. It is not income."
               : openingBalanceConfigured(primary)
                 ? primary.name
                 : "Set the opening balance before treating this as cash on hand"

@@ -113,41 +113,61 @@ export function runningBalance(
 }
 
 /**
- * Physical balance after a cutover.
+ * Physical balance after a counted opening.
  *
- * The opening balance is the money in the account at the end of
- * `openingBalanceDate`. Anything dated on or before that day is already
- * inside it. A receipt counts only when it names this account; a matching
- * payment method is not enough, and a receipt with no account is excluded.
+ * `openingBalanceDate` is the day the external statement or cash count was
+ * true at end of day. `insideOpeningBalance` means that row already existed
+ * and its cash is inside that count. Business dates stay on the row for
+ * reports. They do not decide whether a later-recorded movement moves cash.
+ *
+ * Voiding a counted receipt does not remove cash. Void corrects the student
+ * receipt and does not post money leaving the account. Voiding a receipt
+ * recorded after the count removes it, because that receipt was the cash-in
+ * record.
  */
 export function physicalAccountBalance(input: {
   accountId: string;
   openingBalance: number;
   openingBalanceDate: string | null;
-  ledger: readonly { entryDate: string; accountDelta: number }[];
+  ledger: readonly {
+    entryDate: string;
+    accountDelta: number;
+    /** True when this row was already inside the counted opening balance. */
+    insideOpeningBalance?: boolean;
+  }[];
   receipts: readonly {
     paidOn: string;
     amount: number;
     accountId: string | null;
     status: "completed" | "voided";
+    /** True when this receipt was already inside the counted opening balance. */
+    insideOpeningBalance?: boolean;
   }[];
 }): number {
-  const cutoff = input.openingBalanceDate;
-  const afterCutover = (date: string) => cutoff === null || date > cutoff;
+  const counted = input.openingBalanceDate !== null;
   let ngwee = toNgwee(input.openingBalance);
   for (const entry of input.ledger) {
-    if (afterCutover(entry.entryDate)) ngwee += toNgwee(entry.accountDelta);
+    if (counted && entry.insideOpeningBalance) continue;
+    ngwee += toNgwee(entry.accountDelta);
   }
   for (const receipt of input.receipts) {
-    if (
-      receipt.status === "completed" &&
-      receipt.accountId === input.accountId &&
-      afterCutover(receipt.paidOn)
-    ) {
-      ngwee += toNgwee(receipt.amount);
-    }
+    if (receipt.accountId !== input.accountId) continue;
+    if (counted && receipt.insideOpeningBalance) continue;
+    if (receipt.status === "completed") ngwee += toNgwee(receipt.amount);
   }
   return fromNgwee(ngwee);
+}
+
+/**
+ * actual verified cash minus the derived system balance.
+ * A non-zero difference is reported. It is not posted as an adjustment.
+ */
+export function reconciliationDifference(
+  verifiedAmount: number | null,
+  systemAmount: number,
+): number | null {
+  if (verifiedAmount === null) return null;
+  return fromNgwee(toNgwee(verifiedAmount) - toNgwee(systemAmount));
 }
 
 /** Fund net = student allocations + other income − expenditure. Transfers are absent. */

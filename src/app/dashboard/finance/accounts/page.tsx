@@ -8,6 +8,7 @@ import { RecordTransferForm } from "@/features/finance/components/record-transfe
 import { getFinancialAccountSummary } from "@/features/finance/queries";
 import { FINANCIAL_ACCOUNT_TYPE_LABELS } from "@/features/finance/schemas";
 import {
+  formatCutoverDate,
   moneyHeldReady,
   openingBalanceConfigured,
   openingBalanceSetupBlocked,
@@ -57,10 +58,10 @@ export default async function FinanceAccountsPage() {
 
       {accounts.some((account) => openingBalanceSetupBlocked(account)) ? (
         <p className="text-sm text-muted-foreground">
-          An account that already has an assigned receipt or another movement
-          cannot receive an opening balance. The cash total stays hidden until
-          that is resolved. Do not treat the portal receipt history as the
-          amount still held.
+          Opening balance required. Finance setup records the amount actually
+          held in Bank, Mobile Money, and Petty Cash at the end of one day.
+          Use the statement or cash count. Money Held becomes authoritative
+          only after that, and only for all of those accounts together.
         </p>
       ) : accounts.some((account) => !account.openingBalanceDate) ? (
         <p className="text-sm text-muted-foreground">
@@ -125,9 +126,17 @@ export default async function FinanceAccountsPage() {
                     {account.maskedReference ?? "—"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {openingBalanceConfigured(account)
-                      ? formatKwacha(account.openingBalance)
-                      : "Opening balance required"}
+                    {openingBalanceConfigured(account) ? (
+                      <>
+                        {formatKwacha(account.openingBalance)}
+                        <span className="block text-xs">
+                          As at end of{" "}
+                          {formatCutoverDate(account.openingBalanceDate ?? "")}
+                        </span>
+                      </>
+                    ) : (
+                      "Opening balance required"
+                    )}
                   </TableCell>
                   <TableCell
                     className={

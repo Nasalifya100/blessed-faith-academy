@@ -712,6 +712,38 @@ function runStaticChecks() {
     return true;
   });
 
+  check("OPEN-01", "a verified starting balance does not rewrite history", () => {
+    const name = "20260930200000_financial_account_opening_initialization.sql";
+    const full = path.join(MIGRATIONS_DIR, name);
+    if (!fs.existsSync(full)) return "opening initialization migration missing";
+    const body = stripComments(fs.readFileSync(full, "utf8"));
+    if (body.includes("BFA-R-2026-")) {
+      return "a production receipt is named in opening initialization";
+    }
+    if (!body.includes("on delete restrict")) {
+      return "membership can be removed by deleting a payment or ledger row";
+    }
+    if (!body.includes("order by u.id")) {
+      return "account locks are not taken in a stable order";
+    }
+    if (!body.includes("Every active account must be included in the same starting balance.")) {
+      return "one account can be initialized while another is still open";
+    }
+    if (!body.includes("app.allow_financial_account_initialization")) {
+      return "ordinary account edits can set a used opening balance";
+    }
+    if (/insert\s+into\s+public\.finance_ledger_entries/i.test(body)) {
+      return "initialization posts a ledger entry";
+    }
+    if (body.includes("v_voided_members")) {
+      return "voiding a counted receipt removes cash the void did not record";
+    }
+    if (body.includes("change the physical balance")) {
+      return "a reporting-date correction is still treated as a cash movement";
+    }
+    return true;
+  });
+
   check("MONEY-01", "money math never uses floating point directly", () => {
     const mathFile = path.join(SRC_DIR, "features", "finance", "ledger-math.ts");
     const body = fs.readFileSync(mathFile, "utf8");

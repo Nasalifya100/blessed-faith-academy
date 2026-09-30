@@ -34,6 +34,7 @@ describe("physical account cutover does not double-count", () => {
           amount: 1000,
           accountId: BANK,
           status: "completed",
+          insideOpeningBalance: true,
         },
         {
           paidOn: "2026-10-01",
@@ -71,7 +72,7 @@ describe("physical account cutover does not double-count", () => {
     expect(balance).toBe(0);
   });
 
-  it("keeps a same-day receipt inside the end-of-day opening balance", () => {
+  it("keeps a counted same-day receipt inside the opening balance", () => {
     expect(
       physicalAccountBalance({
         accountId: BANK,
@@ -84,6 +85,7 @@ describe("physical account cutover does not double-count", () => {
             amount: 1000,
             accountId: BANK,
             status: "completed",
+            insideOpeningBalance: true,
           },
         ],
       }),
@@ -186,7 +188,7 @@ describe("physical account cutover does not double-count", () => {
     ).toBe(500);
   });
 
-  it("uses the receipt date, so a 30 September receipt stays inside that day's opening balance", () => {
+  it("adds a receipt recorded after the count even when its date is the cutover day", () => {
     expect(
       physicalAccountBalance({
         accountId: BANK,
@@ -202,7 +204,7 @@ describe("physical account cutover does not double-count", () => {
           },
         ],
       }),
-    ).toBe(20000);
+    ).toBe(21000);
   });
 
   it("drops a voided receipt", () => {

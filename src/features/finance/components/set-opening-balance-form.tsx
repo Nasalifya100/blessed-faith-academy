@@ -55,12 +55,13 @@ export function SetOpeningBalanceForm({
         className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/40"
         aria-label="Opening balance blocked"
       >
-        <p className="font-medium">Opening balance cannot be entered</p>
+        <p className="font-medium">Verified starting balance required</p>
         <p className="text-muted-foreground">
-          This account already has a receipt or another movement, so the
-          database will not accept an opening balance. Do not add the old
-          receipts on top of a counted balance, and do not assign a historical
-          receipt to Bank, Mobile Money, or Petty Cash from this screen.
+          This account already has receipts or other movements. Finance setup
+          records the amount actually held in Bank, Mobile Money, and Petty
+          Cash at the end of one day, from the statement or cash count. This
+          screen cannot set it. Money already in that count is not added again.
+          A receipt entered after the count is added even if its date is earlier.
         </p>
       </section>
     );
@@ -73,12 +74,11 @@ export function SetOpeningBalanceForm({
       aria-label="Set opening balance"
     >
       <p className="text-sm text-muted-foreground">
-        Enter the actual amount held in this account at the end of the cutover
-        date. That amount should already include every transaction up to and
-        including that date. Transactions after that date are added or
-        subtracted automatically. A receipt dated on the cutover date is not
-        added again. The date cannot be changed once the account has a
-        transaction.
+        Enter the amount actually held at the end of the day you choose. Use
+        this only before the account has any receipt or movement. Anything
+        recorded after you save is added or subtracted, even when its date is
+        on or before that day. Do not record money that is already inside the
+        amount you enter.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">

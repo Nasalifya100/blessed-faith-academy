@@ -12,6 +12,7 @@ import {
 } from "@/features/finance/queries";
 import { FINANCIAL_ACCOUNT_TYPE_LABELS } from "@/features/finance/schemas";
 import {
+  formatCutoverDate,
   openingBalanceConfigured,
   openingBalanceSetupBlocked,
 } from "@/features/finance/presentation";
@@ -82,8 +83,8 @@ export default async function AccountDetailPage({
           }
           hint={
             cutoverReady
-              ? `Actual balance at the end of ${account.openingBalanceDate}`
-              : "No cutover date recorded"
+              ? `As at end of ${formatCutoverDate(account.openingBalanceDate ?? "")}`
+              : "No starting date recorded"
           }
         />
         <StatCard
@@ -107,8 +108,8 @@ export default async function AccountDetailPage({
           }
           hint={
             cutoverReady
-              ? "Opening balance, plus receipts and movements after that date"
-              : "Withheld until the end-of-day cutover balance is entered"
+              ? "Starting balance, plus money recorded after it was established"
+              : "Withheld until a verified starting balance is established"
           }
           icon={Landmark}
           tone={
@@ -119,25 +120,29 @@ export default async function AccountDetailPage({
 
       {cutoverReady ? (
         <p className="text-sm text-muted-foreground">
-          Opening {formatKwacha(account.openingBalance)} at the end of{" "}
-          {account.openingBalanceDate}
+          Opening balance {formatKwacha(account.openingBalance)} as at end of{" "}
+          {formatCutoverDate(account.openingBalanceDate ?? "")}
           {" + "}
-          receipts after that date {formatKwacha(account.assignedReceipts)}
+          receipts recorded after that count{" "}
+          {formatKwacha(account.assignedReceipts)}
           {" + "}
-          transfers and other movements after that date{" "}
+          transfers and other movements recorded after that count{" "}
           {formatKwacha(account.ledgerMovement)}
           {" = "}
-          {formatKwacha(account.currentBalance)}.
+          {formatKwacha(account.currentBalance)}. Reversing a receipt that was
+          already inside the count does not remove that cash. A difference
+          against a bank statement or cash count is investigated. It is not
+          adjusted automatically.
           {account.currentBalance < 0
             ? " This balance is below zero. It is shown as recorded and is not corrected automatically."
             : ""}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          Current balance is withheld. Enter the actual amount held at the end
-          of the cutover date before this account is treated as money on hand.
+          Current balance is withheld. Money Held becomes authoritative only
+          after the amount actually held is recorded as the starting balance.
           {setupBlocked
-            ? " Assigned receipts or movements already exist, so that entry is blocked."
+            ? " Receipts or movements already exist, so Finance setup records that verified amount. This page does not."
             : ""}
         </p>
       )}
@@ -150,12 +155,12 @@ export default async function AccountDetailPage({
         <CardHeader>
           <CardTitle>Account history</CardTitle>
           <CardDescription>
-            Student receipts appear in the balance only when the receipt names
-            this account and is dated after the opening balance. Receipts on or
-            before that date are already inside the opening balance. A payment
-            method is never used to guess the account. Negative balances are
-            allowed so a late entry is not blocked; a balance below zero needs
-            investigation before more money is spent.
+            After a starting balance is recorded, money already in that count
+            stays inside it. Correcting a receipt date later does not add or
+            remove that cash. A receipt or movement entered afterwards is added
+            or subtracted even if its date is earlier. Reversing a receipt that
+            was already in the count corrects the student account and does not
+            take cash out. A payment method is never used to guess the account.
           </CardDescription>
         </CardHeader>
         <CardContent>

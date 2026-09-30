@@ -144,7 +144,7 @@ export default async function FinanceOverviewPage({
                 : overview.accounts.some((account) =>
                       openingBalanceSetupBlocked(account),
                     )
-                  ? "Opening balance is blocked where receipts are already assigned"
+                  ? "Money Held becomes authoritative after Finance setup records the statement or cash count for every account at the end of one day."
                   : "Set each account's opening balance before trusting a total"
             }
             icon={Landmark}

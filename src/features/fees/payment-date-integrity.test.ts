@@ -160,50 +160,50 @@ describe("paid_on correction stays narrow", () => {
   });
 });
 
-describe("correcting paid_on moves cutover placement and not the receipt amount", () => {
+describe("correcting paid_on changes the reporting date and not the cash", () => {
   const receipt = {
     amount: 600,
     accountId: "mobile",
     status: "completed" as const,
   };
 
-  it("counts a future paid_on after cutover and drops it once the date is on or before cutover", () => {
+  it("keeps a counted receipt inside the opening balance when its date is corrected", () => {
     const stored = physicalAccountBalance({
       accountId: "mobile",
       openingBalance: 20000,
-      openingBalanceDate: "2026-09-30",
+      openingBalanceDate: "2026-10-05",
       ledger: [],
-      receipts: [{ ...receipt, paidOn: "2026-12-09" }],
+      receipts: [{ ...receipt, paidOn: "92026-02-08", insideOpeningBalance: true }],
     });
     const corrected = physicalAccountBalance({
       accountId: "mobile",
       openingBalance: 20000,
-      openingBalanceDate: "2026-09-30",
+      openingBalanceDate: "2026-10-05",
       ledger: [],
-      receipts: [{ ...receipt, paidOn: "2026-09-15" }],
+      receipts: [{ ...receipt, paidOn: "2026-09-15", insideOpeningBalance: true }],
     });
-    expect(stored).toBe(20600);
+    expect(stored).toBe(20000);
     expect(corrected).toBe(20000);
     expect(receipt.amount).toBe(600);
   });
 
-  it("keeps the physical total when both dates stay after the cutover", () => {
+  it("keeps a later receipt in Money Held when its reporting date moves across the cutover", () => {
     const later = physicalAccountBalance({
       accountId: "mobile",
       openingBalance: 20000,
-      openingBalanceDate: "2026-09-30",
+      openingBalanceDate: "2026-10-05",
       ledger: [],
-      receipts: [{ ...receipt, paidOn: "2026-12-09" }],
+      receipts: [{ ...receipt, paidOn: "2026-10-06" }],
     });
-    const stillAfter = physicalAccountBalance({
+    const movedEarlier = physicalAccountBalance({
       accountId: "mobile",
       openingBalance: 20000,
-      openingBalanceDate: "2026-09-30",
+      openingBalanceDate: "2026-10-05",
       ledger: [],
-      receipts: [{ ...receipt, paidOn: "2026-10-02" }],
+      receipts: [{ ...receipt, paidOn: "2026-09-15" }],
     });
     expect(later).toBe(20600);
-    expect(stillAfter).toBe(20600);
+    expect(movedEarlier).toBe(20600);
   });
 });
 

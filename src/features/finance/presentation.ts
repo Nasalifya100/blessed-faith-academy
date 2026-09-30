@@ -23,9 +23,9 @@ export function openingBalanceConfigured(account: {
 }
 
 /**
- * Before a cutover date exists, the account summary includes every assigned
- * receipt and ledger movement. Any of that activity makes the database reject
- * the first opening balance. This does not unlock or rewrite those rows.
+ * The ordinary account form cannot set a starting balance once receipts or
+ * ledger rows exist. A verified count is recorded separately by Finance setup.
+ * This does not rewrite those rows or treat their stored dates as correct.
  */
 export function openingBalanceSetupBlocked(account: {
   openingBalanceDate: string | null;
@@ -36,6 +36,33 @@ export function openingBalanceSetupBlocked(account: {
     !openingBalanceConfigured(account) &&
     (account.assignedReceipts !== 0 || account.ledgerMovement !== 0)
   );
+}
+
+export type MoneyHeldAccountState =
+  | "not_initialized"
+  | "verified_setup_required"
+  | "initialized";
+
+/** What Money Held may say about one physical account. */
+export function moneyHeldAccountState(account: {
+  openingBalanceDate: string | null;
+  assignedReceipts: number;
+  ledgerMovement: number;
+}): MoneyHeldAccountState {
+  if (openingBalanceConfigured(account)) return "initialized";
+  if (openingBalanceSetupBlocked(account)) return "verified_setup_required";
+  return "not_initialized";
+}
+
+/** End-of-day cutover date for display, without shifting the calendar day. */
+export function formatCutoverDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-ZM", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 /**
