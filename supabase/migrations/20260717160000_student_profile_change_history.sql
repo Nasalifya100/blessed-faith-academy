@@ -1,4 +1,4 @@
-﻿-- ===========================================================================
+-- ===========================================================================
 -- Profile Change History (production-safe)
 --
 -- Adds append-only student_profile_change_audits and trusted update RPCs.
