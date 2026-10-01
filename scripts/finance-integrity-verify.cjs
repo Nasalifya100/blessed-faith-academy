@@ -744,6 +744,39 @@ function runStaticChecks() {
     return true;
   });
 
+  check("TRF-01", "the portal transfer signature is the only locked overload", () => {
+    const name = "20260930210000_finance_transfer_lock_signature_fix.sql";
+    const full = path.join(MIGRATIONS_DIR, name);
+    if (!fs.existsSync(full)) return "transfer signature fix missing";
+    const body = stripComments(fs.readFileSync(full, "utf8"));
+    if (!/drop function public\.record_account_transfer\(\s*uuid,\s*uuid,\s*numeric,\s*date,\s*text,\s*text\s*\)/i.test(body)) {
+      return "the accidental six-argument transfer function is not dropped";
+    }
+    if (/drop function public\.record_account_transfer\(\s*uuid, uuid, numeric, date, text, text, uuid/i.test(body)) {
+      return "the portal seven-argument transfer function is dropped";
+    }
+    if (!body.includes("p_client_request_id uuid default null")) {
+      return "transfer idempotency argument was removed";
+    }
+    const fn = body.slice(body.indexOf("create or replace function public.record_account_transfer"));
+    const advisory = fn.indexOf("pg_advisory_xact_lock");
+    const accounts = fn.indexOf("finance_lock_financial_accounts");
+    const post = fn.indexOf("finance_post_entry");
+    if (!(advisory >= 0 && accounts > advisory && post > accounts)) {
+      return "transfer locks are not advisory, then accounts, then ledger legs";
+    }
+    if (!fn.includes("client_request_id")) {
+      return "a repeated transfer request can insert another transfer";
+    }
+    if (!/revoke all on function public\.record_account_transfer\(\s*uuid, uuid, numeric, date, text, text, uuid\s*\) from public, anon/i.test(body)) {
+      return "transfer execution is not revoked from public and anon";
+    }
+    if (!/grant execute on function public\.record_account_transfer\(\s*uuid, uuid, numeric, date, text, text, uuid\s*\) to authenticated/i.test(body)) {
+      return "authenticated staff cannot record a transfer";
+    }
+    return true;
+  });
+
   check("MONEY-01", "money math never uses floating point directly", () => {
     const mathFile = path.join(SRC_DIR, "features", "finance", "ledger-math.ts");
     const body = fs.readFileSync(mathFile, "utf8");

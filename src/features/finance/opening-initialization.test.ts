@@ -304,6 +304,37 @@ describe("counted opening balance and unresolved dates", () => {
   });
 });
 
+describe("portal transfer signature", () => {
+  const fix = readFileSync(
+    path.join(
+      process.cwd(),
+      "supabase/migrations/20260930210000_finance_transfer_lock_signature_fix.sql",
+    ),
+    "utf8",
+  ).replace(/--.*$/gm, "");
+
+  it("drops only the accidental overload and locks the idempotent function", () => {
+    expect(fix).toMatch(
+      /drop function public\.record_account_transfer\(\s*uuid,\s*uuid,\s*numeric,\s*date,\s*text,\s*text\s*\)/i,
+    );
+    expect(fix).not.toMatch(
+      /drop function public\.record_account_transfer\(\s*uuid, uuid, numeric, date, text, text, uuid/i,
+    );
+    expect(fix).toContain("p_client_request_id uuid default null");
+    expect(fix).toContain("client_request_id");
+    expect(fix).toContain("when unique_violation then");
+    const advisory = fix.indexOf("pg_advisory_xact_lock");
+    const accounts = fix.indexOf("finance_lock_financial_accounts");
+    const post = fix.indexOf("finance_post_entry");
+    expect(advisory).toBeGreaterThan(-1);
+    expect(accounts).toBeGreaterThan(advisory);
+    expect(post).toBeGreaterThan(accounts);
+    expect(fix).toMatch(/set search_path = public/);
+    expect(fix).toMatch(/security definer/);
+    expect(fix).not.toMatch(/grant execute[\s\S]*to anon/i);
+  });
+});
+
 describe("Money Held wording states", () => {
   it("asks for a verified count when activity already exists", () => {
     expect(
